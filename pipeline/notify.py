@@ -170,6 +170,48 @@ def build_message(mkt: str = "us") -> str:
         lines.append("  상위: " + ", ".join(f"{e(nm)} {_f(r)}%p" for r, nm, _ in ranked[:3]))
         lines.append("  하위: " + ", ".join(f"{e(nm)} {_f(r)}%p" for r, nm, _ in ranked[-3:][::-1]))
 
+    # 산업 단위: 오늘 거래 몰린 상승·하락 상위 (종목 수 충분한 산업만)
+    hot_up, hot_dn = [], []
+    for g in W.get("industries", []):
+        if g["n"] < config.SIGNAL_INDUSTRY_MIN_N or day not in g["day"]:
+            continue
+        c, rel, z, turn = classify(g["day"][day], False)
+        if c == "hu":
+            hot_up.append((rel, g, turn))
+        elif c == "hd":
+            hot_dn.append((rel, g, turn))
+    if hot_up or hot_dn:
+        lines.append("")
+        lines.append(f"<b>🏭 산업 ({config.SIGNAL_INDUSTRY_MIN_N}종목 이상)</b>")
+        for rel, g, turn in sorted(hot_up, key=lambda x: -x[0])[:3]:
+            lines.append(f"  🟥 {e(g['name'])} {_f(rel)}%p · {turn:.2f}배")
+        for rel, g, turn in sorted(hot_dn, key=lambda x: x[0])[:3]:
+            lines.append(f"  🟦 {e(g['name'])} {_f(rel)}%p · {turn:.2f}배")
+
+    # 추세·폭
+    tp = config.DATA_ROOT / mkt / "trend.json"
+    if tp.exists():
+        T = json.loads(tp.read_text())
+        M, n_all = T["market"], T["market"]["n"]
+        cols = {c: i for i, c in enumerate(T["stocks"]["cols"])}
+        rows = T["stocks"]["rows"]
+        new_up = sorted([r for r in rows if r[cols["d_change"]] == 1], key=lambda r: -(r[cols["mcap"]] or 0))
+        lost = sum(1 for r in rows if r[cols["d_change"]] == -1)
+
+        def nm(r):
+            if mkt == "us":
+                return r[cols["ticker"]]
+            x = r[cols["name"]]
+            return x if len(x) <= 10 else x[:9] + "…"
+        a50, a50p = M.get("a50"), M.get("a50_prev")
+        lines.append("")
+        lines.append("<b>🧭 추세·폭</b>")
+        lines.append(f"  50일선 위 {a50}%" + (f" (1주 전 {a50p}%)" if a50p is not None else "")
+                     + f" · Stage 2 {M['stage']['2'] / n_all * 100:.0f}% · 8/8 {M['tt']}종목")
+        lines.append(f"  52주 신고가 {M['nh']} · 신저가 {M['nl']} · 완전 정배열 신규 {len(new_up)} / 이탈 {lost}")
+        if new_up:
+            lines.append("  └ 신규: " + ", ".join(e(nm(r)) for r in new_up[:5]))
+
     url = _site_url()
     if url:
         lines.append("")

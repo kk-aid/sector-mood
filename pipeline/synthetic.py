@@ -20,7 +20,7 @@ def make(n_days: int = 180, seed: int = 7, end: str | None = None):
             mcap = float(np.exp(rng.normal(23, 1.4)))       # 시총 로그정규
             px = float(np.exp(rng.normal(3.8, 0.8)))
             universe.append({"ticker": f"T{k:04d}", "yf": f"T{k:04d}", "name": f"{s} Co {j}",
-                             "sector": s, "industry": f"{s} sub{j % 4}",
+                             "sector": s, "industry": f"{s} sub{j % 4}", "industry_en": f"{s} sub{j % 4}",
                              "shares": mcap / px, "mcap": mcap, "_px": px})
             k += 1
     T = [u["ticker"] for u in universe]

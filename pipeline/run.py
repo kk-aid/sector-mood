@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 
 from . import config
+from .analytics import write_analytics
 from .compute import Engine, write_outputs
 
 
@@ -41,6 +42,7 @@ def main():
 
     eng = Engine(universe, A, C, V, mkt)
     idx = write_outputs(eng, label, weeks)
+    write_analytics(eng)
     print(f"[done:{mkt}] 주 {len(idx['weeks'])}개, 최근 거래일 {idx['last_day']}, 종목 {idx['n_stocks']}")
 
 

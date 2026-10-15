@@ -81,6 +81,7 @@ def _fetch(m: dict) -> list[dict]:
             "name_en": name_en,
             "sector": d["sector"],
             "industry": k.get("industry") or d.get("industry") or "",
+            "industry_en": d.get("industry") or "",
             "shares": mcap / close,          # 시총가중용 주식 수 (월중 고정)
             "mcap": mcap,
         })
@@ -120,4 +121,5 @@ def load_universe(mkt: str, force: bool = False, today: date | None = None) -> t
         for u in rows:                                  # 구버전 파일 보정
             u.setdefault("yf_alt", None)
             u.setdefault("name_en", u.get("name"))
+            u.setdefault("industry_en", u.get("industry"))
         return prev.stem, rows

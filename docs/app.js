@@ -1,0 +1,739 @@
+"use strict";
+/* 업종 심리 지도 — 화면 로직
+   보기: 심리 지도(map) / 3국 비교(cross) / 로테이션(rrg) / 연속성(streak) / 추세·폭(trend) / 신호 검증(signal)
+   데이터: data/markets.json, data/<시장>/{index,history,signals,trend}.json, data/<시장>/weeks/<월요일>.json */
+
+const DEF = {weight:"cw", mode:"fixed", turn:"tv", dR:1, wR:2, zR:1, dT:1.1, wT:1.05,
+             unit:"sector", minn:5, freq:"week", tail:"8"};
+const CAT = {hu:"거래 몰린 상승", qu:"조용한 상승", ch:"손바뀜", ca:"소강", ou:"관심 이탈", hd:"거래 몰린 하락"};
+const SHORT = {hu:"몰↑", qu:"조↑", ch:"손", ca:"", ou:"이탈", hd:"몰↓"};
+const CATS = ["hu","qu","ch","ca","ou","hd"];
+const WD = ["월","화","수","목","금"];
+const DSTATE = {"2":"완전 정배열","1":"정배열 진행","0":"혼조","-1":"역배열 진행","-2":"완전 역배열"};
+const DCLS = {"2":"st2","1":"st1","0":"st0","-1":"stm1","-2":"stm2"};
+const DESC = {
+  map: "거래와 등락을 함께 본 그날의 업종 심리. 상대 등락은 시장 대비 %p, 상대 거래는 업종의 직전 20거래일 평균 대비 배수를 시장 배수로 나눈 값. 섹터 이름 앞 ▸ 를 누르면 산업이 펼쳐지고, 칸을 누르면 종목이 열림.",
+  cross: "같은 업종을 미국·한국·일본에서 같은 주에 나란히 놓은 것. 세 시장이 같은 방향으로 기준을 넘으면 '공통', 반대로 넘으면 '엇갈림'. 각 칸은 해당 시장 안에서의 시장 대비 판정임.",
+  rrg: "가로 = RS 추세(시장 대비 강도 ÷ 최근 10주 평균, 100 위면 평균보다 강함), 세로 = RS 모멘텀(RS 추세의 4주 변화, 100 위면 개선 중). 보통 개선 → 선도 → 약화 → 소외 순으로 시계 방향으로 돈다.",
+  streak: "업종별 최근 12주 주간 판정 띠. 같은 판정이 이어지는 주 수(연속)를 보면 일회성 반짝인지 지속되는 흐름인지 구분할 수 있음.",
+  trend: "종목별 이평 배열(일봉 5·20·60·120·200, 주봉 10·20·30·40), Weinstein Stage(30주선), Minervini 트렌드 템플릿 8조건과 업종 breadth(이평선 위 비율, 52주 신고가·신저가). 최신 거래일 기준 스냅샷.",
+  signal: "과거 판정이 다음 기간 시장 대비 성과와 연결되는지 집계한 것. 위의 가중·등락 기준·거래 기준·단위 선택을 그대로 따름. 표본·중첩·비용 한계는 아래 주의 사항 참고.",
+};
+
+let S = load(), MKT = "us", VIEW = "map", WEEK = null, SECF = "";
+let MARKETS = [{key:"us", label:"미국", flag:"🇺🇸"}], INDEX = null, W = null;
+let cache = {}, sortCol = "week", drill = null, expanded = new Set(), rrgSel = null;
+let crossSort = "avg", trendF = {f:"all", sector:null, d:null, w:null};
+
+/* ── 유틸 ─────────────────────────────── */
+function load(){ try{ return {...DEF, ...JSON.parse(localStorage.getItem("sm-settings")||"{}")}; }catch(e){ return {...DEF}; } }
+function save(){ try{ localStorage.setItem("sm-settings", JSON.stringify(S)); }catch(e){} }
+const $ = s => document.querySelector(s);
+const fmt = (x, d=1) => x==null || !isFinite(x) ? "–" : (x>0?"+":"") + x.toFixed(d);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const md = s => s.slice(5).replace("-","/");
+async function getJSON(p){
+  if(cache[p]) return cache[p];
+  const r = await fetch(p, {cache:"no-cache"});
+  if(!r.ok) throw new Error(p+" "+r.status);
+  return cache[p] = await r.json();
+}
+async function tryJSON(p){ try{ return await getJSON(p); }catch(e){ return null; } }
+function weekDates(key){
+  const [y,m,d] = key.split("-").map(Number);
+  return [0,1,2,3,4].map(i => new Date(Date.UTC(y,m-1,d+i)).toISOString().slice(0,10));
+}
+function heat(v, scale=5){
+  if(v==null || !isFinite(v)) return "";
+  const a = Math.min(Math.abs(v)/scale, 1)*0.55;
+  return `background:${v>=0?`rgba(209,52,74,${a})`:`rgba(47,98,196,${a})`}`;
+}
+function moneyFmt(eok, cur){
+  if(eok==null || !isFinite(eok)) return "–";
+  const a = Math.abs(eok);
+  return a >= 10000 ? (eok/10000).toFixed(a>=100000?1:2)+"조 "+cur : Math.round(eok).toLocaleString()+"억 "+cur;
+}
+const money = eok => moneyFmt(eok, INDEX?.currency || "달러");
+function moneyDelta(eok){
+  if(eok==null) return "–";
+  const a = Math.abs(eok), sgn = eok>0 ? "+" : eok<0 ? "−" : "";
+  return sgn + (a >= 10000 ? (a/10000).toFixed(2)+"조" : Math.round(a).toLocaleString()+"억");
+}
+function secName(key){ return W?.sectors.find(s => s.key===key)?.name || key; }
+
+/* ── 분류 (파이썬 classify 와 같은 규칙) ── */
+function classify(o, isWeek){
+  if(!o) return {cls:null};
+  const rel = S.weight==="cw" ? o.rc : o.re;
+  const sig = S.weight==="cw" ? o.sc : o.se;
+  const turn = o[S.turn];
+  const z = (rel!=null && sig) ? rel/sig : null;
+  if(rel==null || turn==null) return {cls:null, rel, z, turn};
+  const x = S.mode==="sigma" ? z : rel;
+  const thr = S.mode==="sigma" ? S.zR : (isWeek ? S.wR : S.dR);
+  const hi = turn >= (isWeek ? S.wT : S.dT);
+  let cls;
+  if(x==null) cls = hi ? "ch" : "ca";
+  else if(x >= thr) cls = hi ? "hu" : "qu";
+  else if(x <= -thr) cls = hi ? "hd" : "ou";
+  else cls = hi ? "ch" : "ca";
+  return {cls, rel, z, turn};
+}
+const relKey = c => S.mode==="sigma" ? c.z : c.rel;
+
+/* 이력(history.json) 그룹 선택 */
+function hGroups(H){
+  if(!H) return [];
+  if(S.unit==="sector") return H.groups.sector;
+  return H.groups.industry.filter(g => (!SECF || g.sector===SECF) && g.n >= S.minn);
+}
+function hIndex(H, key){
+  if(!H) return -1;
+  let i = H.weeks.indexOf(key);
+  if(i >= 0) return i;
+  for(i = H.weeks.length-1; i >= 0; i--) if(H.weeks[i] <= key) return i;
+  return -1;
+}
+const hObj = (g, i) => i < 0 ? null : {rc:g.rc[i], re:g.re[i], sc:g.sc[i], se:g.se[i], tv:g.tv[i], vr:g.vr[i]};
+
+/* ── 라우팅 ────────────────────────────── */
+function setHash(){ history.replaceState(null, "", `#${MKT}/${VIEW}/${WEEK||""}`); }
+function parseHash(){
+  const p = location.hash.slice(1).split("/").filter(Boolean);
+  const out = {};
+  for(const x of p){
+    if(/^\d{4}-\d{2}-\d{2}$/.test(x)) out.week = x;
+    else if(DESC[x]) out.view = x;
+    else out.mkt = x;
+  }
+  return out;
+}
+
+async function init(){
+  MARKETS = (await tryJSON("data/markets.json")) || MARKETS;
+  const h = parseHash();
+  if(h.view) VIEW = h.view;
+  $("#mtabs").innerHTML = MARKETS.length > 1 ? MARKETS.map(m => `<button data-m="${m.key}">${m.flag} ${m.label}</button>`).join("") : "";
+  const keys = MARKETS.map(m => m.key);
+  await openMarket(keys.includes(h.mkt) ? h.mkt : keys[0], h.week);
+}
+
+async function openMarket(key, week){
+  MKT = key;
+  document.querySelectorAll("#mtabs button").forEach(b => b.classList.toggle("on", b.dataset.m===key));
+  INDEX = await tryJSON(`data/${MKT}/index.json`);
+  if(!INDEX){
+    $("#meta").textContent = "";
+    $("#view").innerHTML = `<div class="card"><div class="empty-state">아직 데이터가 없음. GitHub Actions의 첫 실행(백필)이 끝나면 표시됨.</div></div>`;
+    return;
+  }
+  $("#mtag").textContent = INDEX.label || "미국";
+  document.title = `업종 심리 지도 · ${INDEX.label || "미국"}`;
+  $("#meta").textContent = `최근 거래일 ${INDEX.last_day} · 유니버스 ${INDEX.universe} (시총 ${moneyFmt(INDEX.min_mcap/1e8, INDEX.currency||"달러")} 이상 → ${INDEX.n_stocks.toLocaleString()}종목, 월 1회 고정) · 갱신 ${INDEX.generated}`;
+  $("#week").innerHTML = INDEX.weeks.slice().reverse().map(w => `<option value="${w}">${md(w)}(월) 주</option>`).join("");
+  await openWeek(INDEX.weeks.includes(week) ? week : INDEX.weeks[INDEX.weeks.length-1]);
+}
+
+async function openWeek(key){
+  WEEK = key;
+  W = await getJSON(`data/${MKT}/weeks/${key}.json`);
+  $("#week").value = key;
+  const i = INDEX.weeks.indexOf(key);
+  $("#prev").disabled = i<=0; $("#next").disabled = i>=INDEX.weeks.length-1;
+  const secOpts = `<option value="">전체</option>` + W.sectors.map(s => `<option value="${esc(s.key)}">${esc(s.name)}</option>`).join("");
+  if($("#secf").innerHTML !== secOpts) $("#secf").innerHTML = secOpts;
+  if(SECF && !W.sectors.some(s => s.key===SECF)) SECF = "";
+  $("#secf").value = SECF;
+  render();
+}
+
+function syncControls(){
+  document.querySelectorAll(".seg").forEach(g => g.querySelectorAll("button").forEach(b => b.classList.toggle("on", String(S[g.dataset.k])===b.dataset.v)));
+  document.querySelectorAll("[data-t]").forEach(inp => inp.value = S[inp.dataset.t]);
+  $("#minn").value = S.minn;
+  document.querySelectorAll("#vtabs button").forEach(b => b.classList.toggle("on", b.dataset.v===VIEW));
+  document.querySelectorAll("#bar [data-show]").forEach(el => {
+    const ok = el.dataset.show.split(" ").includes(VIEW) && (!el.dataset.unit || el.dataset.unit===S.unit);
+    el.classList.toggle("hide", !ok);
+  });
+  $("#vdesc").textContent = DESC[VIEW];
+}
+
+async function render(){
+  if(!W) return;
+  syncControls(); setHash();
+  const fn = {map:renderMap, cross:renderCross, rrg:renderRRG, streak:renderStreak, trend:renderTrend, signal:renderSignal}[VIEW];
+  await fn();
+  if(drill) (drill.mode==="trend" ? renderTrendDrill : renderDrill)();
+}
+
+/* ══ 1. 심리 지도 ═════════════════════════ */
+function cellHTML(c, attrs, isWeek){
+  if(!c || c.cls==null) return `<td class="c empty${isWeek?" wk":""}">·</td>`;
+  const val = S.mode==="sigma" && c.z!=null ? `${fmt(c.rel)}%p · ${fmt(c.z)}σ` : `${fmt(c.rel)}%p`;
+  return `<td class="c ${c.cls}${isWeek?" wk":""}" ${attrs}><span class="k">${CAT[c.cls]}</span><span class="v mono">${val}</span></td>`;
+}
+function tip(name, c, o, isWeek, nd){
+  if(!o) return name;
+  const w = S.weight==="cw" ? "시총가중" : "동일가중";
+  return `${name}\n상대 등락 ${fmt(c.rel,2)}%p (${w})` + (c.z!=null?` · ${fmt(c.z,2)}σ`:"") +
+    `\n상대 거래대금 ${o.tv?.toFixed(2)}배 · 상대 거래량 ${o.vr?.toFixed(2)}배` +
+    `\n시장 거래대금 중 ${o.sh?.toFixed(1)}% · 상승 종목 ${o.br}%` +
+    (isWeek ? `\n시장 이긴 날 ${S.weight==="cw"?o.wc:o.we}/${nd}` : "");
+}
+
+function mapRows(){
+  const dates = weekDates(W.week), have = new Set(W.days);
+  const mk = (g, kind) => ({g, kind, wk: classify(g.week, true), d: dates.map(dt => have.has(dt) ? classify(g.day[dt], false) : null)});
+  const key = r => sortCol==="week" ? relKey(r.wk) : (r.d[sortCol] ? relKey(r.d[sortCol]) : null);
+  const sorter = (a,b) => (key(b) ?? -1e9) - (key(a) ?? -1e9);
+  const inds = W.industries || [];
+  if(S.unit==="industry"){
+    return inds.filter(g => (!SECF || g.sector===SECF) && g.n >= S.minn).map(g => mk(g,"industry")).sort(sorter);
+  }
+  const rows = [];
+  W.sectors.map(g => mk(g,"sector")).sort(sorter).forEach(r => {
+    rows.push(r);
+    if(expanded.has(r.g.key)) inds.filter(g => g.sector===r.g.key && g.n >= Math.min(S.minn, 3)).map(g => ({...mk(g,"industry"), sub:true})).sort(sorter).forEach(x => rows.push(x));
+  });
+  return rows;
+}
+
+async function renderMap(){
+  const dates = weekDates(W.week);
+  const rows = mapRows();
+  const ev = W.events || {};
+  const nInd = (W.industries||[]).length;
+  let h = `<thead><tr><th class="l">${S.unit==="sector"?"섹터":"산업"}</th>` + dates.map((dt,i) =>
+    `<th class="sortable${sortCol===i?" sorted":""}" data-sort="${i}">${WD[i]} <span class="mono">${md(dt)}</span>${ev[dt]?`<span class="ev" title="${esc(ev[dt].join(" · "))}">⚑</span>`:""}</th>`).join("") +
+    `<th class="sortable wk${sortCol==="week"?" sorted":""}" data-sort="week">주간</th></tr></thead><tbody>`;
+  const mk = W.market, mw = S.weight;
+  h += `<tr class="mk"><td class="sec l">시장 <span>${mw==="cw"?"시총가중":"동일가중"}</span></td>` +
+    dates.map(dt => mk.day[dt] ? `<td class="c mono" style="cursor:default">${fmt(mk.day[dt][mw])}% · ${mk.day[dt].tv?.toFixed(2)}배</td>` : `<td class="c empty">·</td>`).join("") +
+    `<td class="c wk mono" style="cursor:default">${fmt(mk.week[mw])}% · ${mk.week.tv?.toFixed(2)}배</td></tr>`;
+  const counts = {};
+  for(const r of rows){
+    if(!r.sub) counts[r.wk.cls] = (counts[r.wk.cls]||0)+1;
+    const subN = r.kind==="sector" ? (W.industries||[]).filter(g => g.sector===r.g.key).length : 0;
+    const tg = r.kind==="sector" && subN ? `<span class="tog" data-tog="${esc(r.g.key)}">${expanded.has(r.g.key)?"▾":"▸"}</span>` : (r.kind==="sector" ? `<span class="tog"></span>` : "");
+    const sub = S.unit==="industry" ? `<small>${esc(secName(r.g.sector))}</small>` : "";
+    h += `<tr class="${r.sub?"sub":""}"><td class="sec l">${tg}<b>${esc(r.g.name)}</b><span>${r.g.n}</span>${sub}</td>`;
+    r.d.forEach((c,i) => {
+      if(!c){ h += `<td class="c empty">·</td>`; return; }
+      h += cellHTML(c, `data-kind="${r.kind}" data-key="${esc(r.g.key)}" data-day="${i}" title="${esc(tip(r.g.name+" · "+WD[i], c, r.g.day[dates[i]], false))}"`);
+    });
+    h += cellHTML(r.wk, `data-kind="${r.kind}" data-key="${esc(r.g.key)}" data-day="week" title="${esc(tip(r.g.name+" · 주간", r.wk, r.g.week, true, W.days.length))}"`, true);
+    h += `</tr>`;
+  }
+  const legend = CATS.map(k => `<span class="lg"><i class="${k}"></i>${CAT[k]} <b>${counts[k]||0}</b></span>`).join("") +
+    `<span class="lg" style="border:0;background:none">주간 기준 ${S.unit==="sector"?"섹터":"산업"} 수</span>`;
+  const evTxt = Object.entries(ev).map(([d,e]) => `${md(d)} ${e.join("·")}`).join(" / ");
+  const hint = S.unit==="sector" ? `섹터 앞 ▸ 로 산업 펼치기 (산업 ${nInd}개). ` : `산업 ${rows.length}개 표시 (최소 ${S.minn}종목). `;
+  $("#view").innerHTML = `<div class="legend">${legend}</div>
+    <div class="card"><div class="scroll"><table class="grid" id="grid">${h}</tbody></table></div></div>
+    <div class="foot">${evTxt ? "⚑ "+esc(evTxt)+"  ·  " : ""}${hint}칸에 마우스를 올리면 세부 수치, 요일 머리글을 누르면 그날 기준 정렬.</div>
+    <h2 class="sh">규모와 쏠림 <span class="tag">${mw==="cw"?"시총가중":"동일가중"}</span></h2>
+    <p class="sdesc" id="szdesc"></p>
+    <div class="card"><div class="scroll"><table class="tbl" id="sizeT"></table></div></div>
+    ${ruleNote()}`;
+  renderSize(dates);
+}
+
+function ruleNote(){
+  return `<div class="note"><h3>분류 규칙</h3><table>
+      <tr><th></th><th>거래 기준 이상</th><th>거래 기준 미만</th></tr>
+      <tr><th>상승 기준 이상</th><td class="hu">거래 몰린 상승</td><td class="qu">조용한 상승</td></tr>
+      <tr><th>그 사이</th><td class="ch">손바뀜</td><td class="ca">소강</td></tr>
+      <tr><th>하락 기준 이하</th><td class="hd">거래 몰린 하락</td><td class="ou">관심 이탈</td></tr></table>
+    고정 %p 모드: 일간 ±1%p·1.1배, 주간 ±2%p·1.05배. 변동성 σ 모드: 상대 등락을 업종 자신의 직전 60거래일 상대수익률 표준편차로 나눠 ±1σ로 판정(주간은 σ×√일수). 거래량 기준은 종목별 거래량 배수의 평균이라 주가 상승에 따른 거래대금 부풀림이 빠짐. 종목 수가 적은 산업은 몇 종목의 움직임이 판정을 좌우하므로 최소 종목 수를 함께 볼 것. ⚑ 는 옵션 만기·리밸런싱·시장 거래 급증일.</div>`;
+}
+
+function renderSize(dates){
+  const z = W.size;
+  if(!z || !z.buckets){ $("#sizeT").innerHTML = `<tr><td class="empty-state">이 주는 규모 데이터가 없음.</td></tr>`; return; }
+  const w = S.weight;
+  $("#szdesc").textContent = `규모는 연초 시가총액 순위 기준(${z.ref} 종가). 수익률은 절대값 %. 쏠림은 그날 거래대금 중 상위 ${z.conc?.top?.length||10}종목 몫.`;
+  let h = `<thead><tr><th class="l">규모 (연초 시총 순위)</th><th class="wk">주간</th>` +
+    dates.map((d,i) => `<th>${WD[i]} <span class="mono">${md(d)}</span></th>`).join("") + `</tr></thead><tbody>`;
+  for(const b of z.buckets){
+    const wv = b.week[w];
+    h += `<tr><td class="l"><b>${esc(b.label)}</b><span>${b.n.toLocaleString()}</span></td><td class="wk mono ${wv>=0?"pos":"neg"}"><b>${wv==null?"–":fmt(wv,2)+"%"}</b></td>` +
+      dates.map(d => { const v = b.day[d]?.[w]; return v==null ? `<td class="mono" style="color:var(--ink3)">·</td>` : `<td class="mono" style="${heat(v,3)}">${fmt(v,2)}</td>`; }).join("") + `</tr>`;
+  }
+  if(z.conc){
+    const tops = (z.conc.top||[]).map(t => { const r = W.stocks.rows.find(x => x[0]===t); return r ? r[1] : t; });
+    h += `<tr class="conc"><td class="l" title="${esc("주간 상위: "+tops.join(", "))}"><b>쏠림</b><span>거래대금 상위 ${tops.length||10} 몫</span></td><td class="wk mono">${z.conc.week==null?"–":z.conc.week.toFixed(1)+"%"}</td>` +
+      dates.map(d => { const v = z.conc.day[d]; return `<td class="mono">${v==null?"·":v.toFixed(1)+"%"}</td>`; }).join("") + `</tr>`;
+  }
+  $("#sizeT").innerHTML = h + "</tbody>";
+}
+
+/* ── 지도 드릴다운 ── */
+let dSort = {col:"mcap", dir:-1};
+function openDrill(kind, key, day){
+  drill = {mode:"map", kind, key, day};
+  dSort = day==="week" ? {col:"mcap",dir:-1} : {col:"d"+day, dir:-1};
+  $("#dtools").innerHTML = `<input type="search" id="q" placeholder="종목·산업 찾기"><span class="cnt" id="dcnt"></span>`;
+  $("#q").addEventListener("input", () => renderDrill());
+  openSheet(); renderDrill();
+}
+function openSheet(){ $("#sheet").classList.add("open"); document.body.style.overflow="hidden"; }
+function closeDrill(){ drill=null; $("#sheet").classList.remove("open"); document.body.style.overflow=""; }
+
+function renderDrill(){
+  const isInd = drill.kind==="industry";
+  const g = (isInd ? W.industries : W.sectors).find(x => x.key===drill.key);
+  if(!g){ closeDrill(); return; }
+  const dates = weekDates(W.week), have = W.days;
+  const dayPos = dates.map(d => have.indexOf(d));
+  const wk = g.week, cw = S.weight==="cw";
+  const c = classify(wk, true);
+  $("#crumb").textContent = `${INDEX.label||"미국"} · ${isInd ? "산업 · "+secName(g.sector) : "섹터"} · ${md(W.week)}(월) 주`;
+  $("#dtitle").textContent = g.name;
+  $("#dstats").innerHTML =
+    `<span>주간 <b class="${(cw?g.ret_cw:g.ret_ew)>=0?"pos":"neg"} mono">${fmt(cw?g.ret_cw:g.ret_ew,2)}%</b></span>` +
+    `<span>시장 대비 <b class="${c.rel>=0?"pos":"neg"} mono">${fmt(c.rel,2)}%p</b>${c.z!=null?` (${fmt(c.z,2)}σ)`:""}</span>` +
+    `<span>이긴 날 <b>${cw?wk.wc:wk.we}/${have.length}</b></span>` +
+    `<span>거래 몫 <b class="mono">${wk.sh?.toFixed(2)}%</b></span>` +
+    `<span>상대 거래대금 <b class="mono">${wk.tv?.toFixed(2)}배</b></span>` +
+    `<span>상대 거래량 <b class="mono">${wk.vr?.toFixed(2)}배</b></span>` +
+    `<span>상승 종목 <b>${wk.br}%</b></span>` +
+    `<span>판정 <b>${c.cls?CAT[c.cls]:"–"}</b></span>`;
+
+  const q = ($("#q")?.value || "").trim().toLowerCase();
+  const si = W.stocks.sectors.indexOf(isInd ? g.sector : g.key);
+  const ii = isInd ? W.industries.findIndex(x => x.key===g.key) : -1;
+  let rows = W.stocks.rows.filter(r => isInd ? r[11]===ii : r[2]===si);
+  const total = rows.length;
+  if(q) rows = rows.filter(r => (r[0]+" "+r[1]+" "+r[3]).toLowerCase().includes(q));
+  const val = (r, col) => {
+    if(col[0]==="d" && col!=="dmcap"){ const p = dayPos[+col.slice(1)]; return p<0 ? null : r[4][p]; }
+    return {name:r[1], ind:r[3], week:r[5], up:r[6], share:r[7], valx:r[8], mcap:r[9], dmcap:r[10]}[col];
+  };
+  rows.sort((a,b) => {
+    const x = val(a,dSort.col), y = val(b,dSort.col);
+    if(x==null) return 1; if(y==null) return -1;
+    return (typeof x==="string" ? x.localeCompare(y) : x-y) * dSort.dir;
+  });
+  $("#dcnt").textContent = q ? `${rows.length} / ${total}종목` : `${total}종목`;
+  const hl = i => drill.day===i ? " hl" : "";
+  const th = (col, label, cls="") => `<th class="sortable${dSort.col===col?" sorted":""}${cls}" data-col="${col}">${label}${dSort.col===col?(dSort.dir<0?" ▾":" ▴"):""}</th>`;
+  let h = `<thead><tr><th>#</th>${th("name","종목"," l")}${th("ind","산업"," l")}` +
+    dates.map((d,i) => th("d"+i, `${WD[i]} <span class="mono">${md(d)}</span>`, hl(i))).join("") +
+    th("week","주간", drill.day==="week"?" hl":"") + th("up","상승일 거래") + th("share","거래 몫") + th("valx","거래 배수") + th("mcap","시총") + th("dmcap","시총 증감") + `</tr></thead><tbody>`;
+  rows.forEach((r,n) => {
+    h += `<tr><td class="mono" style="color:var(--ink3)">${n+1}</td><td class="nm l"><b>${esc(r[1])}</b><small class="mono">${esc(r[0])}</small></td><td class="ind l" title="${esc(r[3])}">${esc(r[3])}</td>`;
+    dayPos.forEach((p,i) => { const v = p<0?null:r[4][p]; h += `<td class="mono${hl(i)}" style="${heat(v)}">${v==null?"·":fmt(v)}</td>`; });
+    const up = r[6];
+    h += `<td class="mono ${r[5]>=0?"pos":"neg"}${drill.day==="week"?" hl":""}" style="${heat(r[5],8)}">${r[5]==null?"–":fmt(r[5])+"%"}</td>` +
+      `<td class="mono" style="${up==null?"":`background:rgba(${up>=50?"209,52,74":"47,98,196"},${Math.abs(up-50)/50*.5})`}">${up==null?"–":up+"%"}</td>` +
+      `<td class="mono">${r[7]?.toFixed(2)}%</td><td class="mono">${r[8]==null?"–":r[8].toFixed(2)+"x"}</td><td class="mono">${money(r[9])}</td>` +
+      `<td class="mono ${r[10]>0?"pos":r[10]<0?"neg":""}">${moneyDelta(r[10])}</td></tr>`;
+  });
+  $("#stocks").innerHTML = h + "</tbody>";
+}
+
+/* ══ 2. 3국 비교 ══════════════════════════ */
+async function renderCross(){
+  $("#view").innerHTML = `<div class="card"><div class="empty-state">세 시장 이력을 불러오는 중…</div></div>`;
+  const Ms = await Promise.all(MARKETS.map(async m => ({...m, H: await tryJSON(`data/${m.key}/history.json`)})));
+  const avail = Ms.filter(m => m.H);
+  if(avail.length < 2){ $("#view").innerHTML = `<div class="card"><div class="empty-state">비교하려면 두 개 이상 시장의 이력 데이터가 필요함.</div></div>`; return; }
+  avail.forEach(m => { m.i = hIndex(m.H, WEEK); m.wk = m.i>=0 ? m.H.weeks[m.i] : null; });
+  const unit = S.unit;
+  const keys = new Map();
+  for(const m of avail){
+    for(const g of (unit==="sector" ? m.H.groups.sector : m.H.groups.industry)){
+      if(unit==="industry" && (g.n < S.minn || (SECF && g.sector!==SECF))) continue;
+      if(!keys.has(g.key)) keys.set(g.key, {key:g.key, name:g.name, sector:g.sector, by:{}});
+      keys.get(g.key).by[m.key] = g;
+    }
+  }
+  const thr = S.mode==="sigma" ? S.zR : S.wR;
+  let rows = [...keys.values()].filter(r => unit==="sector" || Object.keys(r.by).length >= 2).map(r => {
+    const cells = avail.map(m => { const g = r.by[m.key]; return g ? {m, g, c: classify(hObj(g, m.i), true)} : {m}; });
+    const xs = cells.filter(x => x.c && x.c.cls).map(x => relKey(x.c));
+    const avg = xs.length ? xs.reduce((a,b)=>a+b,0)/xs.length : null;
+    const ups = xs.filter(x => x >= thr).length, dns = xs.filter(x => x <= -thr).length;
+    let tagHTML = "";
+    if(xs.length >= 2 && ups === xs.length) tagHTML = `<span class="badge up">${xs.length}국 공통 강세</span>`;
+    else if(xs.length >= 2 && dns === xs.length) tagHTML = `<span class="badge dn">${xs.length}국 공통 약세</span>`;
+    else if(ups && dns) tagHTML = `<span class="badge">엇갈림</span>`;
+    const sameSign = xs.length>=2 && (xs.every(x => x>0) || xs.every(x => x<0));
+    return {...r, cells, avg, tagHTML, sameSign, tagRank: ups===xs.length||dns===xs.length ? 2 : (ups&&dns ? 1 : 0)};
+  });
+  const sk = crossSort;
+  rows.sort((a,b) => {
+    if(sk==="avg") return (b.avg??-1e9)-(a.avg??-1e9);
+    if(sk==="tag") return b.tagRank-a.tagRank || (b.avg??-1e9)-(a.avg??-1e9);
+    const v = r => { const c = r.cells.find(x => x.m.key===sk)?.c; return c && c.cls ? relKey(c) : -1e9; };
+    return v(b)-v(a);
+  });
+  const nm = r => { if(unit==="sector") return secNameAny(r.key, r.name); const any = Object.values(r.by)[0]; return any.name; };
+  let h = `<thead><tr><th class="l">${unit==="sector"?"섹터":"산업"}</th>` +
+    avail.map(m => `<th class="sortable${sk===m.key?" sorted":""}" data-xs="${m.key}">${m.flag} ${m.label}<br><span class="mono" style="font-weight:400">${m.wk?md(m.wk)+" 주":"–"}</span></th>`).join("") +
+    `<th class="sortable${sk==="avg"?" sorted":""}" data-xs="avg">평균</th><th class="sortable c${sk==="tag"?" sorted":""}" data-xs="tag">동조</th></tr></thead><tbody>`;
+  for(const r of rows){
+    h += `<tr><td class="sec l"><b>${esc(nm(r))}</b>${unit==="industry"?`<small>${esc(secNameAny(r.sector))}</small>`:""}</td>`;
+    for(const x of r.cells){
+      if(!x.g || !x.c || !x.c.cls){ h += `<td class="c empty xc">·</td>`; continue; }
+      const stale = x.m.wk !== WEEK ? `<span class="stale">${md(x.m.wk)} 주 기준</span>` : "";
+      const val = S.mode==="sigma" && x.c.z!=null ? `${fmt(x.c.rel)}%p · ${fmt(x.c.z)}σ` : `${fmt(x.c.rel)}%p`;
+      h += `<td class="c xc ${x.c.cls}" data-xm="${x.m.key}" data-key="${esc(r.key)}" data-kind="${unit}" title="${esc(`${x.m.label} · ${x.g.name} (${x.g.n}종목)\n상대 거래 ${x.c.turn?.toFixed(2)}배`)}"><span class="k">${CAT[x.c.cls]}</span><span class="v mono">${val}</span>${stale}</td>`;
+    }
+    h += `<td class="mono ${r.avg>=0?"pos":"neg"}">${r.avg==null?"–":fmt(r.avg,2)+(S.mode==="sigma"?"σ":"%p")}</td><td class="ctr">${r.tagHTML}</td></tr>`;
+  }
+  const nCommonUp = rows.filter(r => r.tagHTML.includes("강세")).length, nCommonDn = rows.filter(r => r.tagHTML.includes("약세")).length;
+  $("#view").innerHTML = `<div class="legend"><span class="lg">공통 강세 <b>${nCommonUp}</b></span><span class="lg">공통 약세 <b>${nCommonDn}</b></span><span class="lg">엇갈림 <b>${rows.filter(r=>r.tagHTML.includes("엇갈림")).length}</b></span>
+      <span class="lg" style="border:0;background:none">주간 기준 · ${S.mode==="sigma"?`±${S.zR}σ`:`±${S.wR}%p`}</span></div>
+    <div class="card"><div class="scroll"><table class="grid" id="crossT">${h}</tbody></table></div></div>
+    <div class="foot">칸을 누르면 그 시장의 같은 주 종목 목록이 열림. 시장마다 휴장일·장 마감 시각이 달라 최신 주가 다를 수 있음(주황 표시). 각 시장 수익률은 지수가 아니라 유니버스 평균 대비임.</div>
+    ${ruleNote()}`;
+}
+function secNameAny(key, fallback){
+  const n = W?.sectors.find(s => s.key===key)?.name;
+  return n || fallback || key;
+}
+
+/* ══ 4. 로테이션 ═══════════════════════════ */
+const QD = {lead:{n:"선도", c:"var(--s2)", bg:"var(--q-lead)"}, weak:{n:"약화", c:"var(--s3)", bg:"var(--q-weak)"},
+            lag:{n:"소외", c:"var(--s4)", bg:"var(--q-lag)"}, imp:{n:"개선", c:"var(--dn)", bg:"var(--q-imp)"}};
+const quad = (x,y) => x>=100 ? (y>=100?"lead":"weak") : (y>=100?"imp":"lag");
+
+async function renderRRG(){
+  const H = await tryJSON(`data/${MKT}/history.json`);
+  if(!H){ $("#view").innerHTML = `<div class="card"><div class="empty-state">이력 데이터가 아직 없음.</div></div>`; return; }
+  const i = hIndex(H, WEEK), T = +S.tail, w = S.weight;
+  const groups = hGroups(H).map(g => {
+    const pts = [];
+    for(let k = Math.max(0, i-T); k <= i; k++){ const x = g["x_"+w][k], y = g["y_"+w][k]; if(x!=null && y!=null) pts.push({x, y, wk:H.weeks[k]}); }
+    return {g, pts};
+  }).filter(o => o.pts.length);
+  if(!groups.length){ $("#view").innerHTML = `<div class="card"><div class="empty-state">이 주는 로테이션 좌표를 계산할 이력이 부족함(최소 14주 필요).</div></div>`; return; }
+  let dx = 1, dy = 1;
+  for(const o of groups) for(const p of o.pts){ dx = Math.max(dx, Math.abs(p.x-100)); dy = Math.max(dy, Math.abs(p.y-100)); }
+  dx *= 1.12; dy *= 1.12;
+  const Wd = 760, Ht = 560, m = {l:46, r:16, t:16, b:36};
+  const sx = x => m.l + (x-(100-dx))/(2*dx)*(Wd-m.l-m.r);
+  const sy = y => m.t + (1-(y-(100-dy))/(2*dy))*(Ht-m.t-m.b);
+  const cx = sx(100), cy = sy(100);
+  let svg = `<svg viewBox="0 0 ${Wd} ${Ht}" role="img" aria-label="업종 로테이션 맵">
+    <rect x="${cx}" y="${m.t}" width="${Wd-m.r-cx}" height="${cy-m.t}" fill="${QD.lead.bg}"/>
+    <rect x="${cx}" y="${cy}" width="${Wd-m.r-cx}" height="${Ht-m.b-cy}" fill="${QD.weak.bg}"/>
+    <rect x="${m.l}" y="${cy}" width="${cx-m.l}" height="${Ht-m.b-cy}" fill="${QD.lag.bg}"/>
+    <rect x="${m.l}" y="${m.t}" width="${cx-m.l}" height="${cy-m.t}" fill="${QD.imp.bg}"/>
+    <line x1="${cx}" y1="${m.t}" x2="${cx}" y2="${Ht-m.b}" stroke="var(--ink3)" stroke-width="1"/>
+    <line x1="${m.l}" y1="${cy}" x2="${Wd-m.r}" y2="${cy}" stroke="var(--ink3)" stroke-width="1"/>
+    <text x="${Wd-m.r-8}" y="${m.t+18}" text-anchor="end" font-size="13" font-weight="600" fill="${QD.lead.c}">선도</text>
+    <text x="${Wd-m.r-8}" y="${Ht-m.b-8}" text-anchor="end" font-size="13" font-weight="600" fill="${QD.weak.c}">약화</text>
+    <text x="${m.l+8}" y="${Ht-m.b-8}" font-size="13" font-weight="600" fill="${QD.lag.c}">소외</text>
+    <text x="${m.l+8}" y="${m.t+18}" font-size="13" font-weight="600" fill="${QD.imp.c}">개선</text>
+    <text x="${(m.l+Wd-m.r)/2}" y="${Ht-8}" text-anchor="middle" font-size="11" fill="var(--ink2)">RS 추세 →</text>
+    <text x="14" y="${(m.t+Ht-m.b)/2}" text-anchor="middle" font-size="11" fill="var(--ink2)" transform="rotate(-90 14 ${(m.t+Ht-m.b)/2})">RS 모멘텀 →</text>
+    <text x="${m.l}" y="${Ht-m.b+14}" font-size="10" fill="var(--ink3)" class="mono">${(100-dx).toFixed(1)}</text>
+    <text x="${Wd-m.r}" y="${Ht-m.b+14}" text-anchor="end" font-size="10" fill="var(--ink3)">${(100+dx).toFixed(1)}</text>
+    <text x="${m.l-4}" y="${m.t+10}" text-anchor="end" font-size="10" fill="var(--ink3)">${(100+dy).toFixed(1)}</text>
+    <text x="${m.l-4}" y="${Ht-m.b}" text-anchor="end" font-size="10" fill="var(--ink3)">${(100-dy).toFixed(1)}</text>`;
+  const many = groups.length > 25;
+  for(const o of groups){
+    const head = o.pts[o.pts.length-1], q = quad(head.x, head.y), col = QD[q].c;
+    const dim = rrgSel && rrgSel!==o.g.key, on = rrgSel===o.g.key;
+    const op = dim ? .12 : 1;
+    const d = o.pts.map((p,k) => `${k?"L":"M"}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join("");
+    svg += `<g opacity="${op}" data-rg="${esc(o.g.key)}" style="cursor:pointer"><title>${esc(`${o.g.name} (${QD[q].n})\nRS 추세 ${head.x.toFixed(2)} · 모멘텀 ${head.y.toFixed(2)}`)}</title>`;
+    svg += `<path d="${d}" fill="none" stroke="${col}" stroke-width="${on?2.5:1.5}" stroke-opacity=".7"/>`;
+    o.pts.slice(0,-1).forEach(p => svg += `<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="2" fill="${col}" fill-opacity=".55"/>`);
+    svg += `<circle cx="${sx(head.x).toFixed(1)}" cy="${sy(head.y).toFixed(1)}" r="${on?7:5}" fill="${col}" stroke="var(--panel)" stroke-width="1.5"/>`;
+    if(!many || on) svg += `<text x="${(sx(head.x)+8).toFixed(1)}" y="${(sy(head.y)+4).toFixed(1)}" font-size="11.5" font-weight="${on?700:500}" fill="var(--ink)">${esc(o.g.name)}</text>`;
+    svg += `</g>`;
+  }
+  svg += `</svg>`;
+  const k4 = Math.max(0, i-4);
+  const list = groups.map(o => {
+    const head = o.pts[o.pts.length-1], q = quad(head.x, head.y);
+    const px = o.g["x_"+w][k4], py = o.g["y_"+w][k4];
+    const pq = px!=null && py!=null ? quad(px, py) : null;
+    return {o, head, q, pq, dist: Math.hypot(head.x-100, head.y-100)};
+  });
+  const order = {lead:0, imp:1, weak:2, lag:3};
+  list.sort((a,b) => order[a.q]-order[b.q] || b.dist-a.dist);
+  let lh = `<thead><tr><th class="l">${S.unit==="sector"?"섹터":"산업"}</th><th>추세</th><th>모멘텀</th><th class="l">4주 전 → 지금</th></tr></thead><tbody>`;
+  for(const x of list){
+    const moved = x.pq && x.pq!==x.q ? `${QD[x.pq].n} → <b>${QD[x.q].n}</b>` : QD[x.q].n;
+    lh += `<tr data-rg="${esc(x.o.g.key)}" class="${rrgSel===x.o.g.key?"on":""}"><td class="l"><span class="qd" style="background:${QD[x.q].c}"></span>${esc(x.o.g.name)}</td><td class="mono">${x.head.x.toFixed(1)}</td><td class="mono">${x.head.y.toFixed(1)}</td><td class="l">${moved}</td></tr>`;
+  }
+  const cnt = q => list.filter(x => x.q===q).length;
+  $("#view").innerHTML = `<div class="legend">${Object.entries(QD).map(([k,v]) => `<span class="lg"><i style="background:${v.c}"></i>${v.n} <b>${cnt(k)}</b></span>`).join("")}
+      <span class="lg" style="border:0;background:none">${md(H.weeks[i])} 주 · 꼬리 ${T}주 · ${w==="cw"?"시총가중":"동일가중"}</span></div>
+    <div class="rrg-wrap"><div class="card rrg">${svg}</div>
+    <div class="card" style="max-height:600px;overflow:auto"><table class="rlist">${lh}</tbody></table></div></div>
+    <div class="foot">${many ? "업종이 많아 이름은 선택한 항목만 표시함. 오른쪽 목록이나 점을 누르면 강조됨. " : "점이나 목록을 누르면 강조, 다시 누르면 해제. "}좌표는 JdK RRG의 공개 근사식(RS÷10주 평균, 4주 변화)이라 상용 RRG 값과 정확히 같지는 않음.</div>`;
+}
+
+/* ══ 5. 연속성 ═════════════════════════════ */
+async function renderStreak(){
+  const H = await tryJSON(`data/${MKT}/history.json`);
+  if(!H){ $("#view").innerHTML = `<div class="card"><div class="empty-state">이력 데이터가 아직 없음.</div></div>`; return; }
+  const i = hIndex(H, WEEK), N = 12;
+  const ks = []; for(let k = Math.max(0, i-N+1); k <= i; k++) ks.push(k);
+  const rows = hGroups(H).map(g => {
+    const cs = ks.map(k => classify(hObj(g,k), true).cls);
+    const cur = cs[cs.length-1];
+    let streak = 0; for(let k = cs.length-1; k >= 0 && cs[k]===cur; k--) streak++;
+    // 같은 방향(상승계열/하락계열) 연속
+    const dir = c => c==="hu"||c==="qu" ? 1 : c==="hd"||c==="ou" ? -1 : 0;
+    let dstreak = 0; const dc = dir(cur); if(dc) for(let k = cs.length-1; k >= 0 && dir(cs[k])===dc; k--) dstreak++;
+    const upN = cs.filter(c => dir(c)===1).length, dnN = cs.filter(c => dir(c)===-1).length;
+    return {g, cs, cur, streak, dstreak, dc, upN, dnN};
+  });
+  rows.sort((a,b) => (b.cur!=="ca") - (a.cur!=="ca") || b.dstreak - a.dstreak || b.streak - a.streak || (b.upN-b.dnN)-(a.upN-a.dnN));
+  let h = `<thead><tr><th class="l">${S.unit==="sector"?"섹터":"산업"}</th>` + ks.map(k => `<th class="c" style="padding:8px 2px;font-size:11px">${md(H.weeks[k])}</th>`).join("") +
+    `<th class="l">이번 판정</th><th>같은 판정</th><th>같은 방향</th><th>12주 상승·하락</th></tr></thead><tbody>`;
+  for(const r of rows){
+    h += `<tr><td class="l"><b>${esc(r.g.name)}</b> <span style="color:var(--ink3);font-size:12px">${r.g.n}</span></td>` +
+      r.cs.map((c,j) => `<td class="s ${c||""}" title="${esc(md(H.weeks[ks[j]])+" 주 · "+(c?CAT[c]:"자료 없음"))}">${c?SHORT[c]:"·"}</td>`).join("") +
+      `<td class="l">${r.cur?`<span class="state ${r.cur}" style="min-width:auto;padding:2px 8px">${CAT[r.cur]}</span>`:"–"}</td>` +
+      `<td class="mono">${r.cur && r.cur!=="ca" ? r.streak+"주" : "–"}</td>` +
+      `<td class="mono ${r.dc>0?"pos":r.dc<0?"neg":""}">${r.dc ? (r.dc>0?"▲ ":"▼ ")+r.dstreak+"주" : "–"}</td>` +
+      `<td class="mono"><span class="pos">${r.upN}</span> · <span class="neg">${r.dnN}</span></td></tr>`;
+  }
+  $("#view").innerHTML = `<div class="legend">${CATS.map(k => `<span class="lg"><i class="${k}"></i>${CAT[k]}${SHORT[k]?` (${SHORT[k]})`:""}</span>`).join("")}</div>
+    <div class="card"><div class="scroll"><table class="tbl strip">${h}</tbody></table></div></div>
+    <div class="foot">'같은 방향'은 거래 몰린/조용한 상승을 상승 계열로, 관심 이탈/거래 몰린 하락을 하락 계열로 묶어 센 연속 주 수. 정렬: 이번 주 소강이 아닌 업종 중 같은 방향 연속이 긴 순.</div>`;
+}
+
+/* ══ 6·7. 추세·폭 ══════════════════════════ */
+function distBar(d, keys, colors, n){
+  return `<div class="dist" title="${esc(keys.map(k => `${colors[k][1]} ${d[k]||0}`).join(" · "))}">` +
+    keys.map(k => `<i style="width:${n?(d[k]||0)/n*100:0}%;background:${colors[k][0]}"></i>`).join("") + `</div>`;
+}
+const DCOL = {"2":["var(--c-hu)","완전 정배열"],"1":["var(--c-qu)","정배열 진행"],"0":["var(--c-ca)","혼조"],"-1":["var(--c-ou)","역배열 진행"],"-2":["var(--c-hd)","완전 역배열"]};
+const SCOL = {"1":["var(--s1)","1 바닥"],"2":["var(--s2)","2 상승"],"3":["var(--s3)","3 천장"],"4":["var(--s4)","4 하락"]};
+function spark(arr, w=110, h=26, lo=0, hi=100){
+  const v = arr.map(x => x==null?null:x);
+  const pts = v.map((x,i) => x==null?null:[i/(v.length-1||1)*w, h-(x-lo)/(hi-lo||1)*h]).filter(Boolean);
+  if(pts.length < 2) return "";
+  const mid = h-(50-lo)/(hi-lo)*h;
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><line x1="0" y1="${mid}" x2="${w}" y2="${mid}" stroke="var(--line)"/><path d="${pts.map((p,i)=>`${i?"L":"M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("")}" fill="none" stroke="var(--accent)" stroke-width="1.5"/></svg>`;
+}
+function lineChart(weeks, series, h=180){
+  const Wd = 760, m = {l:34, r:12, t:12, b:24};
+  const n = weeks.length; if(n < 2) return "";
+  const sx = i => m.l + i/(n-1)*(Wd-m.l-m.r), sy = v => m.t + (1-v/100)*(h-m.t-m.b);
+  let s = `<svg viewBox="0 0 ${Wd} ${h}" style="width:100%;height:auto">`;
+  [0,25,50,75,100].forEach(v => s += `<line x1="${m.l}" x2="${Wd-m.r}" y1="${sy(v)}" y2="${sy(v)}" stroke="var(--line2)"/><text x="${m.l-6}" y="${sy(v)+3}" text-anchor="end" font-size="10" fill="var(--ink3)">${v}</text>`);
+  [0, Math.floor((n-1)/2), n-1].forEach(i => s += `<text x="${sx(i)}" y="${h-6}" text-anchor="middle" font-size="10" fill="var(--ink3)">${md(weeks[i])}</text>`);
+  for(const se of series){
+    const d = se.v.map((v,i) => v==null?"":`${i&&se.v[i-1]!=null?"L":"M"}${sx(i).toFixed(1)},${sy(v).toFixed(1)}`).join("");
+    s += `<path d="${d}" fill="none" stroke="${se.c}" stroke-width="2"/>`;
+  }
+  return s + `</svg>`;
+}
+
+async function renderTrend(){
+  const T = await tryJSON(`data/${MKT}/trend.json`);
+  if(!T){ $("#view").innerHTML = `<div class="card"><div class="empty-state">추세 데이터가 아직 없음.</div></div>`; return; }
+  const M = T.market, n = M.n;
+  const pct = (a,b) => b ? (a/b*100).toFixed(1)+"%" : "–";
+  const s2 = M.stage["2"], s2p = M.stage2_prev;
+  const rows = T.stocks.rows;
+  const newUp = rows.filter(r => r[12]===1).length, lost = rows.filter(r => r[12]===-1).length;
+  const newS2 = rows.filter(r => r[7]===2 && r[8]!==2 && r[8]!=null).length;
+  const kpi = (l, v, d) => `<div class="kpi"><div class="l">${l}</div><div class="n mono">${v}</div><div class="d">${d||""}</div></div>`;
+  const kpis = kpi("50일선 위", (M.a50??"–")+"%", `1주 전 ${M.a50_prev??"–"}%`) + kpi("200일선 위", (M.a200??"–")+"%", "") +
+    kpi("Stage 2 (상승)", pct(s2, n), `${s2.toLocaleString()}종목 · 지난주 ${s2p.toLocaleString()}`) +
+    kpi("일봉 완전 정배열", pct(M.d["2"], n), `오늘 신규 ${newUp} · 이탈 ${lost}`) +
+    kpi("Minervini 8/8", M.tt.toLocaleString()+"종목", pct(M.tt, n)) +
+    kpi("52주 신고가 − 신저가", fmt(M.nh-M.nl,0), `오늘 ${M.nh}·${M.nl} / 이번 주 ${M.nh_w}·${M.nl_w}`);
+  const hist = T.history;
+  const chart = lineChart(hist.weeks, [{v:hist.market.a50, c:"var(--accent)"},{v:hist.market.a200, c:"var(--warn)"},{v:hist.market.s2, c:"var(--up)"}]);
+
+  const dk = ["2","1","0","-1","-2"], sk = ["2","1","3","4"];
+  let st = `<thead><tr><th class="l">섹터</th><th class="l">일봉 배열 분포</th><th>주봉 정배열</th><th class="l">Stage 분포</th><th>Stage 2</th><th>8/8</th><th>50일선 위</th><th>200일선 위</th><th>신고가·신저가 (주)</th><th class="l">50일선 위 추이</th></tr></thead><tbody>`;
+  const secs = T.sectors.slice().sort((a,b) => (b.a50??0)-(a.a50??0));
+  for(const s of secs){
+    const wUp = (s.w["2"]||0)+(s.w["1"]||0);
+    const d2 = s.stage["2"] - s.stage2_prev;
+    const h50 = hist.sectors[s.key]?.a50 || [];
+    st += `<tr class="click" data-tsec="${esc(s.key)}"><td class="l"><b>${esc(s.name)}</b><span>${s.n}</span></td>
+      <td class="l">${distBar(s.d, dk, DCOL, s.n)}</td><td class="mono">${pct(wUp, s.n)}</td>
+      <td class="l">${distBar(s.stage, sk, SCOL, s.n)}</td>
+      <td class="mono">${pct(s.stage["2"], s.n)} <span class="${d2>0?"pos":d2<0?"neg":""}" style="font-size:11px">${d2?fmt(d2,0):""}</span></td>
+      <td class="mono">${s.tt}</td>
+      <td class="mono" style="${heat((s.a50??50)-50, 40)}">${s.a50??"–"}% <span style="font-size:11px;color:var(--ink3)">${s.a50!=null&&s.a50_prev!=null?fmt(s.a50-s.a50_prev,0):""}</span></td>
+      <td class="mono" style="${heat((s.a200??50)-50, 40)}">${s.a200??"–"}%</td>
+      <td class="mono"><span class="pos">${s.nh_w}</span> · <span class="neg">${s.nl_w}</span></td>
+      <td class="l">${spark(h50)}</td></tr>`;
+  }
+  // 일봉 × 주봉 교차표 (시장 전체)
+  const mx = {};
+  rows.forEach(r => { if(r[6]==null) return; const k = r[4]+"|"+r[6]; mx[k] = (mx[k]||0)+1; });
+  let mh = `<thead><tr><th>일봉 ↓ / 주봉 →</th>${dk.map(k => `<th>${DSTATE[k]}</th>`).join("")}</tr></thead><tbody>`;
+  for(const d of dk){
+    mh += `<tr><th style="text-align:left">${DSTATE[d]}</th>` + dk.map(w => { const v = mx[d+"|"+w]||0; return `<td class="mono${v?"":" z"}" data-mx="${d}|${w}" style="${v?heat((+d + +w)*1.0*(v/Math.max(...Object.values(mx)))*2.5, 5):""}">${v||"·"}</td>`; }).join("") + `</tr>`;
+  }
+  $("#view").innerHTML = `<div class="kpis">${kpis}</div>
+    <div class="card" style="padding:12px 14px"><div style="font-size:12.5px;color:var(--ink2);margin-bottom:6px">시장 breadth 추이 (주간) — <span style="color:var(--accent)">■ 50일선 위</span> · <span style="color:var(--warn)">■ 200일선 위</span> · <span style="color:var(--up)">■ Stage 2 비율</span> (%)</div>${chart}</div>
+    <h2 class="sh">섹터별 추세·폭 <span class="tag">${T.asof} 기준</span></h2>
+    <p class="sdesc">행을 누르면 그 섹터 종목의 이평 배열·Stage·Minervini 상태가 열림. 막대: 일봉 배열(빨강=정배열 → 파랑=역배열), Stage(초록=2 상승, 주황=3 천장, 빨강=4 하락, 회색=1 바닥).</p>
+    <div class="card"><div class="scroll"><table class="tbl">${st}</tbody></table></div></div>
+    <h2 class="sh">일봉 × 주봉 배열 교차</h2>
+    <p class="sdesc">시장 전체 종목 수. 예: 주봉 정배열인데 일봉이 혼조·역배열 진행이면 큰 추세 안의 눌림 구간 후보. 칸을 누르면 해당 종목 목록이 열림.</p>
+    <div class="card"><div class="scroll"><table class="mx" style="width:auto;min-width:100%">${mh}</tbody></table></div></div>
+    <div class="filters" style="margin-top:14px">
+      <button class="chipb" data-tq="newup">신규 완전 정배열 ${newUp}</button>
+      <button class="chipb" data-tq="lost">정배열 이탈 ${lost}</button>
+      <button class="chipb" data-tq="news2">Stage 2 신규 진입 ${newS2}</button>
+      <button class="chipb" data-tq="tt">Minervini 8/8 ${M.tt}</button>
+    </div>
+    <div class="note"><h3>정의</h3>
+      완전 정배열: 가격 > ${T.daily_mas.join(" > ")}일선(주봉은 가격 > ${T.weekly_mas.join(" > ")}주선). 정배열 진행: 가운데 세 선만 정렬(일봉 20>60>120, 주봉 20>30>40). 역배열은 반대.
+      Stage: 30주선 4주 기울기 +1% 초과면 가격이 위=2·아래=3, −1% 미만이면 가격이 아래=4·위=1, 그 사이(횡보)는 26주 전보다 30주선이 높으면 3, 아니면 1.
+      Minervini 8조건: 가격>150·200일선, 150>200일선, 200일선 1개월 상승, 50일선>150·200일선, 가격>50일선, 52주 저점 대비 +30% 이상, 52주 고점 대비 −25% 이내, RS 등급 70 이상(3·6·9·12개월 수익률 40·20·20·20 가중, 이 시장 유니버스 내 백분위).</div>`;
+}
+
+function openTrendDrill(opts){
+  trendF = {f:"all", sector:null, d:null, w:null, ...opts};
+  drill = {mode:"trend"};
+  dSort = {col:"mcap", dir:-1};
+  const chips = [["all","전체"],["full","완전 정배열"],["newup","신규 정배열"],["lost","정배열 이탈"],["s2","Stage 2"],["news2","Stage 2 신규"],["tt","8/8"],["rs80","RS 80+"]];
+  $("#dtools").innerHTML = `<input type="search" id="q" placeholder="종목·산업 찾기"><div class="filters" id="tchips">${chips.map(([k,l]) => `<button class="chipb" data-tf="${k}">${l}</button>`).join("")}</div><span class="cnt" id="dcnt"></span>`;
+  $("#q").addEventListener("input", () => renderTrendDrill());
+  $("#tchips").addEventListener("click", e => { const b = e.target.closest("[data-tf]"); if(!b) return; trendF.f = b.dataset.tf; renderTrendDrill(); });
+  openSheet(); renderTrendDrill();
+}
+
+async function renderTrendDrill(){
+  const T = await tryJSON(`data/${MKT}/trend.json`);
+  if(!T) return;
+  const sname = trendF.sector ? (T.sectors.find(s => s.key===trendF.sector)?.name || trendF.sector) : "시장 전체";
+  $("#crumb").textContent = `${INDEX.label||"미국"} · 추세·폭 · ${T.asof} 기준`;
+  $("#dtitle").textContent = sname + (trendF.d!=null ? ` · 일봉 ${DSTATE[trendF.d]} × 주봉 ${DSTATE[trendF.w]}` : "");
+  const si = trendF.sector ? T.stocks.sectors.indexOf(trendF.sector) : -1;
+  let rows = T.stocks.rows.filter(r => si<0 || r[2]===si);
+  if(trendF.d!=null) rows = rows.filter(r => String(r[4])===trendF.d && String(r[6])===trendF.w);
+  const base = rows.length;
+  const F = {all:()=>true, full:r=>r[4]===2, newup:r=>r[12]===1, lost:r=>r[12]===-1, s2:r=>r[7]===2, news2:r=>r[7]===2&&r[8]!=null&&r[8]!==2, tt:r=>r[9]===8, rs80:r=>r[10]>=80};
+  rows = rows.filter(F[trendF.f]);
+  const q = ($("#q")?.value||"").trim().toLowerCase();
+  const inds = T.stocks.industries;
+  if(q) rows = rows.filter(r => (r[0]+" "+r[1]+" "+(inds[r[3]]||"")).toLowerCase().includes(q));
+  document.querySelectorAll("#tchips [data-tf]").forEach(b => b.classList.toggle("on", b.dataset.tf===trendF.f));
+  const s = T.sectors.find(x => x.key===trendF.sector) || T.market;
+  $("#dstats").innerHTML = `<span>종목 <b>${s.n}</b></span><span>일봉 완전 정배열 <b>${s.d["2"]}</b></span><span>Stage 2 <b>${s.stage["2"]}</b></span><span>8/8 <b>${s.tt}</b></span><span>50일선 위 <b>${s.a50??"–"}%</b></span><span>200일선 위 <b>${s.a200??"–"}%</b></span><span>이번 주 신고가·신저가 <b>${s.nh_w}·${s.nl_w}</b></span>`;
+  const val = (r,c) => ({name:r[1], ind:inds[r[3]]||"", d:r[4]*1000+r[5], w:r[6], stage:r[7], tt:r[9], rs:r[10], hi:r[11], mcap:r[13], g20:r[14][1], g200:r[14][4]}[c]);
+  rows.sort((a,b) => { const x = val(a,dSort.col), y = val(b,dSort.col); if(x==null) return 1; if(y==null) return -1; return (typeof x==="string"?x.localeCompare(y):x-y)*dSort.dir; });
+  $("#dcnt").textContent = `${rows.length} / ${base}종목`;
+  const th = (col, label, cls="") => `<th class="sortable${dSort.col===col?" sorted":""}${cls}" data-col="${col}">${label}${dSort.col===col?(dSort.dir<0?" ▾":" ▴"):""}</th>`;
+  let h = `<thead><tr><th>#</th>${th("name","종목"," l")}${th("ind","산업"," l")}${th("d","일봉 배열"," c")}${th("w","주봉 배열"," c")}${th("stage","Stage"," c")}${th("tt","Minervini")}${th("rs","RS")}${th("hi","52주 고점 대비")}` +
+    T.daily_mas.map((m,i) => i===1 ? th("g20", `이격 ${m}`) : i===4 ? th("g200", `이격 ${m}`) : `<th>이격 ${m}</th>`).join("") + th("mcap","시총") + `</tr></thead><tbody>`;
+  rows.slice(0, 600).forEach((r,n) => {
+    const chg = r[12]===1 ? ` <span class="pos" title="오늘 신규 진입">●</span>` : r[12]===-1 ? ` <span class="neg" title="오늘 이탈">○</span>` : "";
+    const sg = r[7]==null ? "–" : (r[8]!=null && r[8]!==r[7] ? `<span class="stg stg${r[8]}" style="opacity:.5">${r[8]}</span>→<span class="stg stg${r[7]}">${r[7]}</span>` : `<span class="stg stg${r[7]}">${r[7]}</span>`);
+    h += `<tr><td class="mono" style="color:var(--ink3)">${n+1}</td><td class="nm l"><b>${esc(r[1])}</b><small class="mono">${esc(r[0])}</small></td><td class="ind l">${esc(inds[r[3]]||"")}</td>
+      <td class="ctr"><span class="state ${DCLS[r[4]]}">${DSTATE[r[4]]}</span>${chg} <span class="mono" style="font-size:11px;color:var(--ink3)">${r[5]}일</span></td>
+      <td class="ctr">${r[6]==null?"–":`<span class="state ${DCLS[r[6]]}">${DSTATE[r[6]]}</span>`}</td>
+      <td class="ctr">${sg}</td>
+      <td class="mono ${r[9]===8?"pos":""}">${r[9]==null?"–":r[9]+"/8"}</td>
+      <td class="mono">${r[10]??"–"}</td><td class="mono">${r[11]==null?"–":fmt(r[11])+"%"}</td>` +
+      r[14].map(g => `<td class="mono" style="${heat(g, 15)}">${g==null?"–":fmt(g)}</td>`).join("") +
+      `<td class="mono">${money(r[13])}</td></tr>`;
+  });
+  if(rows.length > 600) h += `<tr><td colspan="20" class="ctr" style="color:var(--ink3)">상위 600종목만 표시. 검색이나 필터로 좁혀 볼 것.</td></tr>`;
+  $("#stocks").innerHTML = h + "</tbody>";
+}
+
+/* ══ 3. 신호 검증 ══════════════════════════ */
+async function renderSignal(){
+  const SG = await tryJSON(`data/${MKT}/signals.json`);
+  if(!SG){ $("#view").innerHTML = `<div class="card"><div class="empty-state">신호 검증 데이터가 아직 없음.</div></div>`; return; }
+  const key = `${S.unit}|${S.freq}|${S.mode}|${S.weight}|${S.turn}`;
+  const tb = SG.tables[key];
+  if(!tb){ $("#view").innerHTML = `<div class="card"><div class="empty-state">이 조합의 표가 없음 (${esc(key)}).</div></div>`; return; }
+  const hz = S.freq==="week" ? ["다음 1주","다음 4주"] : ["다음날","다음 5일"];
+  const allM = [tb.h1.all.mean, tb.h2.all.mean];
+  let h = `<thead><tr><th class="l" rowspan="2">판정</th>${hz.map(x => `<th class="g" colspan="5">${x} 시장 대비 (%p)</th>`).join("")}</tr>
+    <tr>${[0,1].map(() => `<th class="lead">표본</th><th>평균</th><th>중앙값</th><th>승률</th><th>t</th>`).join("")}</tr></thead><tbody>`;
+  for(const k of [...CATS, "all"]){
+    const isAll = k==="all";
+    h += `<tr class="${isAll?"base":""}"><td class="l">${isAll?"<b>전체 (기준선)</b>":`<span class="state ${k}" style="min-width:auto;padding:2px 8px">${CAT[k]}</span>`}</td>`;
+    [tb.h1, tb.h2].forEach((t, j) => {
+      const r = t[k] || {n:0};
+      if(!r.n){ h += `<td class="lead mono">0</td><td colspan="4" class="ctr" style="color:var(--ink3)">표본 없음</td>`; return; }
+      const ex = r.mean - (allM[j]||0);
+      const sig = Math.abs(r.t||0) >= 2 && r.n >= 30;
+      h += `<td class="lead mono">${r.n.toLocaleString()}</td><td class="mono" style="${isAll?"":heat(ex, 1.5)}"><b>${fmt(r.mean,2)}</b></td><td class="mono">${fmt(r.med,2)}</td><td class="mono">${r.hit?.toFixed(0)}%</td><td class="mono" style="${sig?"font-weight:700":"color:var(--ink3)"}">${r.t==null?"–":r.t.toFixed(1)}</td>`;
+    });
+    h += `</tr>`;
+  }
+  const unitTxt = S.unit==="sector" ? "섹터" : "산업(5종목 이상)";
+  $("#view").innerHTML = `<div class="legend"><span class="lg">${unitTxt}</span><span class="lg">${S.freq==="week"?"주간 판정":"일간 판정"}</span><span class="lg">${S.mode==="sigma"?"변동성 σ":"고정 %p"}</span><span class="lg">${S.weight==="cw"?"시총가중":"동일가중"}</span><span class="lg">${S.turn==="tv"?"거래대금":"거래량"}</span>
+      <span class="lg" style="border:0;background:none">기간 ${SG.from} ~ ${SG.to} (${SG.weeks}주)</span></div>
+    <div class="card"><div class="scroll"><table class="sig">${h}</tbody></table></div></div>
+    <div class="foot">평균 칸 색 = 전체 평균 대비 초과분(빨강 높음·파랑 낮음). t는 평균÷표준오차이고, |t|≥2·표본 30 이상이면 굵게 표시함. 기준값 조정은 반영되지 않고 기본값(일 ±1%p·1.1배, 주 ±2%p·1.05배, ±1σ)으로 집계됨.</div>
+    <div class="warnbox"><b>읽을 때 주의</b><br>
+      ① 기간이 2년 미만이고 같은 주의 업종들은 서로 상관돼 있어 실제 독립 표본은 표의 숫자보다 훨씬 적음.<br>
+      ② ${hz[1]} 성과는 기간이 겹치는 관측치를 모두 썼으므로 t값이 부풀려져 있음. 방향 확인용으로만 볼 것.<br>
+      ③ 거래비용·슬리피지 없음. 업종 바스켓을 그대로 사는 것을 가정함.<br>
+      ④ 현재 유니버스로 과거를 계산해 생존 편향이 있음.<br>
+      ⑤ 여러 조합을 바꿔 보다 보면 우연히 좋아 보이는 조합이 반드시 나옴. 한 조합만 보고 결론 내리지 말고, 시장·가중·단위를 바꿔도 같은 방향이 유지되는지 확인할 것.</div>`;
+}
+
+/* ── 이벤트 ─────────────────────────── */
+document.querySelectorAll(".seg").forEach(g => g.addEventListener("click", e => {
+  const b = e.target.closest("button"); if(!b) return;
+  S[g.dataset.k] = b.dataset.v; save(); render();
+}));
+document.querySelectorAll("[data-t]").forEach(inp => inp.addEventListener("change", () => {
+  const v = parseFloat(inp.value); if(isFinite(v)){ S[inp.dataset.t] = v; save(); render(); }
+}));
+$("#minn").addEventListener("change", e => { const v = parseInt(e.target.value,10); if(v>0){ S.minn = v; save(); render(); } });
+$("#secf").addEventListener("change", e => { SECF = e.target.value; render(); });
+$("#reset").onclick = () => { Object.assign(S, {dR:DEF.dR, wR:DEF.wR, zR:DEF.zR, dT:DEF.dT, wT:DEF.wT}); save(); render(); };
+$("#week").onchange = e => openWeek(e.target.value);
+$("#prev").onclick = () => openWeek(INDEX.weeks[INDEX.weeks.indexOf(WEEK)-1]);
+$("#next").onclick = () => openWeek(INDEX.weeks[INDEX.weeks.indexOf(WEEK)+1]);
+$("#mtabs").addEventListener("click", e => {
+  const b = e.target.closest("button[data-m]"); if(!b || b.dataset.m===MKT) return;
+  closeDrill(); sortCol = "week"; SECF = ""; rrgSel = null; openMarket(b.dataset.m, WEEK);
+});
+$("#vtabs").addEventListener("click", e => {
+  const b = e.target.closest("button[data-v]"); if(!b) return;
+  VIEW = b.dataset.v; closeDrill(); render();
+});
+$("#view").addEventListener("click", async e => {
+  const t = e.target;
+  const tog = t.closest("[data-tog]");
+  if(tog){ const k = tog.dataset.tog; expanded.has(k) ? expanded.delete(k) : expanded.add(k); render(); return; }
+  const s = t.closest("th[data-sort]");
+  if(s){ sortCol = s.dataset.sort==="week" ? "week" : +s.dataset.sort; render(); return; }
+  const xs = t.closest("th[data-xs]");
+  if(xs){ crossSort = xs.dataset.xs; render(); return; }
+  const xm = t.closest("td[data-xm]");
+  if(xm){
+    const {xm:m, key, kind} = xm.dataset;
+    VIEW = "map"; if(kind==="industry") S.unit = "industry";
+    if(m!==MKT) await openMarket(m, WEEK); else render();
+    openDrill(kind, key, "week"); return;
+  }
+  const cell = t.closest("td[data-kind]");
+  if(cell && VIEW==="map"){ openDrill(cell.dataset.kind, cell.dataset.key, cell.dataset.day==="week" ? "week" : +cell.dataset.day); return; }
+  const rg = t.closest("[data-rg]");
+  if(rg){ rrgSel = rrgSel===rg.dataset.rg ? null : rg.dataset.rg; render(); return; }
+  const ts = t.closest("[data-tsec]");
+  if(ts){ openTrendDrill({sector: ts.dataset.tsec}); return; }
+  const mx = t.closest("td[data-mx]");
+  if(mx && !mx.classList.contains("z")){ const [d,w] = mx.dataset.mx.split("|"); openTrendDrill({d, w}); return; }
+  const tq = t.closest("[data-tq]");
+  if(tq){ openTrendDrill({f: tq.dataset.tq}); return; }
+});
+$("#stocks").addEventListener("click", e => {
+  const th = e.target.closest("th[data-col]"); if(!th) return;
+  const col = th.dataset.col;
+  dSort = dSort.col===col ? {col, dir:-dSort.dir} : {col, dir: (col==="name"||col==="ind") ? 1 : -1};
+  drill?.mode==="trend" ? renderTrendDrill() : renderDrill();
+});
+$("#close").onclick = closeDrill;
+$("#sheet").addEventListener("click", e => { if(e.target.id==="sheet") closeDrill(); });
+document.addEventListener("keydown", e => { if(e.key==="Escape" && drill) closeDrill(); });
+init();
