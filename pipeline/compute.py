@@ -33,13 +33,31 @@ def _r(x, nd=2):
     return round(float(x), nd)
 
 
-def _third_friday(y, m):
-    d = pd.Timestamp(y, m, 15)
-    return d + pd.Timedelta(days=(4 - d.weekday()) % 7)
+def _nth_weekday(y, m, weekday, n):
+    """y년 m월의 n번째 weekday (월=0)."""
+    d = pd.Timestamp(y, m, 1)
+    d += pd.Timedelta(days=(weekday - d.weekday()) % 7)
+    return d + pd.Timedelta(weeks=n - 1)
+
+
+QUARTER = (3, 6, 9, 12)
+
+
+def derivative_events(mkt: str, d: pd.Timestamp) -> list[str]:
+    """시장별 파생상품 만기일 표시."""
+    if mkt == "us" and d == _nth_weekday(d.year, d.month, 4, 3):
+        return ["쿼드러플 위칭·지수 리밸런싱" if d.month in QUARTER else "월물 옵션 만기"]
+    if mkt == "kr" and d == _nth_weekday(d.year, d.month, 3, 2):
+        return ["선물·옵션 동시만기" if d.month in QUARTER else "옵션 만기"]
+    if mkt == "jp" and d == _nth_weekday(d.year, d.month, 4, 2):
+        return ["메이저 SQ" if d.month in QUARTER else "SQ (옵션 정산)"]
+    return []
 
 
 class Engine:
-    def __init__(self, universe: list[dict], A: pd.DataFrame, C: pd.DataFrame, V: pd.DataFrame):
+    def __init__(self, universe: list[dict], A: pd.DataFrame, C: pd.DataFrame, V: pd.DataFrame,
+                 mkt: str = "us"):
+        self.mkt = mkt
         meta = pd.DataFrame(universe).drop_duplicates("ticker").set_index("ticker")
         cols = [t for t in A.columns if t in meta.index]
         self.meta = meta.loc[cols]
@@ -65,8 +83,9 @@ class Engine:
         ret = A.pct_change(fill_method=None)
         ret = ret.where(ret.abs() < 3)                    # 비정상값(데이터 오류) 제거
         self.ret = ret
-        self.value = (C * V).where(C.notna())             # 달러 거래대금
+        self.value = (C * V).where(C.notna())             # 현지 통화 거래대금
         W = (self.meta["shares"] * C.shift(1)).where(ret.notna())   # 전일 시총 가중치
+        self.W = W
 
         cw = self._gsum(W * ret) / self._gsum(W)
         ew = self._gmean(ret.clip(-config.RET_CLIP, config.RET_CLIP))
@@ -93,9 +112,7 @@ class Engine:
 
     # ── 이벤트일 ─────────────────────────────────────────
     def events(self, d: pd.Timestamp) -> list[str]:
-        ev = []
-        if d == _third_friday(d.year, d.month):
-            ev.append("쿼드러플 위칭·지수 리밸런싱" if d.month in (3, 6, 9, 12) else "월물 옵션 만기")
+        ev = derivative_events(self.mkt, d)
         m = self.mkt_tv_raw.get(d)
         if m is not None and np.isfinite(m):
             if m >= config.MARKET_SPIKE:
@@ -103,6 +120,47 @@ class Engine:
             elif m <= 0.65:
                 ev.append(f"저거래일 ({m:.2f}배, 반일장 등)")
         return ev
+
+    # ── 규모와 쏠림 ──────────────────────────────────────
+    def _year_rank(self, year: int):
+        """연초 첫 거래일 시총 순위 (데이터가 연초 이후부터면 첫 거래일 기준)."""
+        idx = self.A.index
+        cand = idx[idx >= pd.Timestamp(year, 1, 1)]
+        if not len(cand):
+            return None, None
+        d = cand[0]
+        mc = self.meta["shares"] * self.C.loc[d]
+        return d, mc.dropna().rank(ascending=False, method="first")
+
+    def size_block(self, days, ds) -> dict:
+        ref, rank = self._year_rank(days[0].year)
+        if rank is None:
+            return {}
+        buckets = []
+        for lo, hi, label in config.SIZE_BUCKETS:
+            mem = rank.index[(rank >= lo) & ((rank <= hi) if hi else True)]
+            if not len(mem):
+                continue
+            r, w = self.ret.loc[days, mem], self.W.loc[days, mem]
+            cw = (w * r).sum(axis=1, min_count=1) / w.sum(axis=1, min_count=1)
+            ew = r.clip(-config.RET_CLIP, config.RET_CLIP).mean(axis=1)
+            buckets.append({
+                "label": label, "n": int(len(mem)),
+                "day": {dk: {"cw": _r(cw[d] * 100), "ew": _r(ew[d] * 100)} for d, dk in zip(days, ds)},
+                "week": {"cw": _r((np.prod(1 + cw.dropna()) - 1) * 100),
+                         "ew": _r((np.prod(1 + ew.dropna()) - 1) * 100)},
+            })
+        k = config.CONCENTRATION_TOP
+        val = self.value.loc[days]
+        conc_day = {dk: _r(val.loc[d].nlargest(k).sum() / val.loc[d].sum() * 100, 1) for d, dk in zip(days, ds)}
+        vw = val.sum()
+        tops = vw.nlargest(k)
+        return {
+            "ref": ref.strftime("%Y-%m-%d"),
+            "buckets": buckets,
+            "conc": {"day": conc_day, "week": _r(tops.sum() / vw.sum() * 100, 1),
+                     "top": [str(t) for t in tops.index]},
+        }
 
     # ── 주간 묶음 ────────────────────────────────────────
     def week_keys(self) -> list[pd.Timestamp]:
@@ -180,6 +238,9 @@ class Engine:
         val_w = self.value.loc[days].sum()
         up_val = self.value.loc[days].where(retw > 0).sum()
         last_close = self.C.loc[:days[-1]].ffill().iloc[-1]
+        pos0 = idx.get_loc(d0)
+        prev_close = self.C.iloc[:pos0].ffill().iloc[-1] if pos0 > 0 else pd.Series(dtype=float)
+        dmcap = self.meta["shares"] * (last_close - prev_close.reindex(last_close.index))
         rows = []
         for t in self.meta.index:
             vw = val_w.get(t, 0) or 0
@@ -193,31 +254,57 @@ class Engine:
                 _r(up_val.get(t, 0) / vw * 100, 0) if vw > 0 else None,
                 _r(vw / mkt_val_w * 100, 3),
                 _r(vw / (n * avg), 2) if avg and np.isfinite(avg) and avg > 0 else None,
-                _r(self.meta.at[t, "shares"] * last_close.get(t, np.nan) / 1e8, 0),   # 억 달러
+                _r(self.meta.at[t, "shares"] * last_close.get(t, np.nan) / 1e8, 0),   # 억 (현지 통화)
+                _r(dmcap.get(t, np.nan) / 1e8, 0),                                    # 주간 시총 증감, 억
             ])
 
         return {
             "week": monday.strftime("%Y-%m-%d"),
             "days": ds,
             "universe": universe_label,
+            "mkt": self.mkt,
             "market": {
                 "day": {dk: {"cw": _r(self.cw.at[d, "MARKET"] * 100), "ew": _r(self.ew.at[d, "MARKET"] * 100),
                              "tv": _r(self.mkt_tv_raw.get(d), 3)} for d, dk in zip(days, ds)},
                 "week": {"cw": _r(mkt_cw_w * 100), "ew": _r(mkt_ew_w * 100), "tv": _r(mkt_tv_w, 3)},
             },
             "events": {dk: ev for d, dk in zip(days, ds) if (ev := self.events(d))},
+            "size": self.size_block(days, ds),
             "sectors": sectors,
             "stocks": {
                 "cols": ["ticker", "name", "sector", "industry", "days", "week",
-                         "upshare", "share", "valx", "mcap"],
+                         "upshare", "share", "valx", "mcap", "dmcap"],
                 "sectors": self.sectors,
                 "rows": rows,
             },
         }
 
 
+def _cleanup_legacy():
+    """구버전(미국 단일 시장) 출력 docs/data/index.json, docs/data/weeks 제거."""
+    old = config.DATA_ROOT / "index.json"
+    if old.exists():
+        old.unlink()
+    oldw = config.DATA_ROOT / "weeks"
+    if oldw.exists():
+        for f in oldw.glob("*.json"):
+            f.unlink()
+        oldw.rmdir()
+
+
+def write_markets_index():
+    """docs/data/markets.json: 화면 탭 목록."""
+    items = []
+    for k, m in config.MARKETS.items():
+        p = config.DATA_ROOT / k / "index.json"
+        if p.exists():
+            items.append({"key": k, "label": m["label"], "flag": m["flag"]})
+    (config.DATA_ROOT / "markets.json").write_text(json.dumps(items, ensure_ascii=False))
+
+
 def write_outputs(engine: Engine, universe_label: str, n_weeks: int):
-    out = config.DATA_OUT
+    mk = config.market(engine.mkt)
+    out = config.DATA_ROOT / engine.mkt
     (out / "weeks").mkdir(parents=True, exist_ok=True)
     weeks = engine.week_keys()
     for m in weeks[-n_weeks:]:
@@ -233,7 +320,12 @@ def write_outputs(engine: Engine, universe_label: str, n_weeks: int):
         "last_day": engine.A.index[-1].strftime("%Y-%m-%d"),
         "universe": universe_label,
         "n_stocks": int(len(engine.meta)),
-        "min_mcap": config.MIN_MCAP_USD,
+        "min_mcap": mk["min_mcap"],
+        "currency": mk["currency"],
+        "market": engine.mkt, "label": mk["label"], "flag": mk["flag"],
     }
     (out / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1))
+    if engine.mkt == "us":
+        _cleanup_legacy()
+    write_markets_index()
     return index

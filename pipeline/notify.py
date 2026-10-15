@@ -1,6 +1,6 @@
 """텔레그램 아침 알림.
 
-  python -m pipeline.notify            # 전송 (환경변수 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 필요)
+  python -m pipeline.notify --market kr  # 전송 (환경변수 TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 필요)
   python -m pipeline.notify --dry-run  # 전송 없이 메시지만 출력
   python -m pipeline.notify --fail URL # 갱신 실패 알림
 
@@ -51,10 +51,11 @@ def classify(o: dict, is_week: bool) -> tuple[str | None, float | None, float | 
     return c, rel, z, turn
 
 
-def _load_weeks():
-    idx = json.loads((config.DATA_OUT / "index.json").read_text())
+def _load_weeks(mkt: str):
+    base = config.DATA_ROOT / mkt
+    idx = json.loads((base / "index.json").read_text())
     def wk(k):
-        return json.loads((config.DATA_OUT / "weeks" / f"{k}.json").read_text())
+        return json.loads((base / "weeks" / f"{k}.json").read_text())
     cur = wk(idx["weeks"][-1])
     prev = wk(idx["weeks"][-2]) if len(idx["weeks"]) > 1 else None
     return idx, cur, prev
@@ -72,8 +73,9 @@ def _site_url():
     return f"https://{owner}.github.io/{name}/"
 
 
-def build_message() -> str:
-    idx, W, P = _load_weeks()
+def build_message(mkt: str = "us") -> str:
+    m = config.market(mkt)
+    idx, W, P = _load_weeks(mkt)
     e = html.escape
     day = W["days"][-1]
     d = date.fromisoformat(day)
@@ -87,7 +89,7 @@ def build_message() -> str:
 
     wkey = config.NOTIFY_WEIGHT
     mk = W["market"]["day"][day]
-    lines = [f"<b>📊 미국 업종 심리 · {d.month}/{d.day}({WD[d.weekday()]})</b>",
+    lines = [f"<b>{m['flag']} {m['label']} 업종 심리 · {d.month}/{d.day}({WD[d.weekday()]})</b>",
              f"시장 {_f(mk[wkey], 2)}% · 거래대금 {mk['tv']:.2f}배 "
              f"({'시총' if wkey == 'cw' else '동일'}가중)"]
     if W.get("events", {}).get(day):
@@ -112,7 +114,12 @@ def build_message() -> str:
         si = sec_list.index(sector_key)
         rows = [r for r in W["stocks"]["rows"] if r[ci["sector"]] == si and r[ci["days"]][pos] is not None]
         rows.sort(key=lambda r: -(r[ci["share"]] or 0))
-        return ", ".join(f"{e(r[ci['ticker']])} {_f(r[ci['days']][pos])}"
+        def label(r):
+            if mkt == "us":
+                return r[ci["ticker"]]
+            nm = r[ci["name"]]
+            return nm if len(nm) <= 10 else nm[:9] + "…"
+        return ", ".join(f"{e(label(r))} {_f(r[ci['days']][pos])}"
                          for r in rows[:config.NOTIFY_TOP_STOCKS])
 
     sigma = config.NOTIFY_MODE == "sigma"
@@ -166,7 +173,7 @@ def build_message() -> str:
     url = _site_url()
     if url:
         lines.append("")
-        lines.append(f'<a href="{url}#{W["week"]}">🔗 전체 지도 보기</a>')
+        lines.append(f'<a href="{url}#{mkt}/{W["week"]}">🔗 전체 지도 보기</a>')
     # 텔레그램 한도 4096자: 태그가 잘리지 않도록 줄 단위로 줄임
     while len("\n".join(lines)) > 4000 and len(lines) > 5:
         lines.pop(-3 if url else -1)
@@ -187,13 +194,14 @@ def send(text: str):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--market", default="us", choices=list(config.MARKETS))
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--fail", metavar="RUN_URL")
     a = ap.parse_args()
     if a.fail:
         text = f"⚠️ <b>업종 심리 지도 갱신 실패</b>\n<a href=\"{html.escape(a.fail)}\">실행 로그 보기</a>"
     else:
-        text = build_message()
+        text = build_message(a.market)
     if a.dry_run:
         print(text)
     else:

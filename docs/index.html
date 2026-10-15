@@ -110,6 +110,17 @@ th.l,td.l{text-align:left}
 .st td.ind{color:var(--ink2);font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis}
 .st .hl{box-shadow:inset 2px 0 0 var(--accent),inset -2px 0 0 var(--accent)}
 .pos{color:var(--up)} .neg{color:var(--dn)}
+.mtabs{display:flex;gap:6px;margin:18px 0 0}
+.mtabs button{border:1px solid var(--line);background:var(--panel);color:var(--ink2);font:inherit;font-size:14px;font-weight:500;padding:6px 14px;border-radius:999px;cursor:pointer}
+.mtabs button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+h2.sh{font-size:17px;margin:34px 0 4px;display:flex;align-items:center;gap:8px}
+.sdesc{color:var(--ink2);font-size:12.5px;margin:0 0 10px}
+.sz td{border-bottom:1px solid var(--line2);padding:9px 12px;font-size:13px}
+.sz th{padding:9px 12px}
+.sz td.l b{font-weight:500}
+.sz td.l span{color:var(--ink3);font-size:12px;margin-left:4px}
+.sz td.wk,.sz th.wk{border-right:2px solid var(--line)}
+.sz tr.conc td{background:var(--bg);color:var(--ink2)}
 .empty-state{padding:60px 20px;text-align:center;color:var(--ink2)}
 @media (max-width:640px){
   .wrap{padding:20px 12px 48px}
@@ -121,9 +132,10 @@ th.l,td.l{text-align:left}
 <body>
 <div class="wrap">
   <header>
-    <h1>업종 × 요일 심리 지도 <span class="tag">미국</span></h1>
+    <h1>업종 × 요일 심리 지도 <span class="tag" id="mtag">미국</span></h1>
     <p class="desc">거래와 등락을 함께 본 그날의 업종 심리. 상대 등락은 시장 대비 %p, 상대 거래는 업종의 직전 20거래일 평균 대비 배수를 시장 배수로 나눈 값. 칸을 누르면 그 업종의 종목이 열림.</p>
     <div class="meta" id="meta">불러오는 중…</div>
+    <div class="mtabs" id="mtabs"></div>
   </header>
 
   <div class="bar">
@@ -153,6 +165,10 @@ th.l,td.l{text-align:left}
   <div class="legend" id="legend"></div>
   <div class="card"><div class="scroll"><table class="grid" id="grid"></table></div></div>
   <div class="foot" id="foot"></div>
+
+  <h2 class="sh">규모와 쏠림 <span class="tag" id="szw">시총가중</span></h2>
+  <p class="sdesc" id="szdesc">규모는 연초 시가총액 순위 기준. 쏠림은 그날 거래대금 중 상위 10종목 몫.</p>
+  <div class="card"><div class="scroll"><table class="sz" id="sizeT"></table></div></div>
 
   <div class="note">
     <h3>분류 규칙</h3>
@@ -186,6 +202,7 @@ const CAT = {
 };
 const WD = ["월","화","수","목","금"];
 let S = load(), INDEX = null, W = null, cache = {}, sortCol = "week", drill = null;
+let MKT = "us", MARKETS = [{key:"us", label:"미국", flag:"🇺🇸"}];
 
 function load(){ try{ return {...DEF, ...JSON.parse(localStorage.getItem("sm-settings")||"{}")}; }catch(e){ return {...DEF}; } }
 function save(){ try{ localStorage.setItem("sm-settings", JSON.stringify(S)); }catch(e){} }
@@ -228,19 +245,30 @@ async function getJSON(p){
 }
 
 async function init(){
-  try{ INDEX = await getJSON("data/index.json"); }
-  catch(e){ $("#meta").textContent = ""; $("#grid").innerHTML = `<tr><td class="empty-state">아직 데이터가 없음. GitHub Actions의 첫 실행(백필)이 끝나면 표시됨.</td></tr>`; return; }
-  $("#meta").textContent = `최근 거래일 ${INDEX.last_day} · 유니버스 ${INDEX.universe} (시총 ${(INDEX.min_mcap/1e8).toLocaleString()}억 달러 이상 → ${INDEX.n_stocks.toLocaleString()}종목, 월 1회 고정) · 갱신 ${INDEX.generated}`;
-  const sel = $("#week");
-  sel.innerHTML = INDEX.weeks.slice().reverse().map(w => `<option value="${w}">${w.slice(5).replace("-","/")}(월) 주</option>`).join("");
-  const h = location.hash.slice(1);
-  await openWeek(INDEX.weeks.includes(h) ? h : INDEX.weeks[INDEX.weeks.length-1]);
+  try{ MARKETS = await getJSON("data/markets.json"); }catch(e){}
+  const [hm, hw] = location.hash.slice(1).split("/");
+  const keys = MARKETS.map(m => m.key);
+  $("#mtabs").innerHTML = MARKETS.length > 1 ? MARKETS.map(m => `<button data-m="${m.key}">${m.flag} ${m.label}</button>`).join("") : "";
+  await openMarket(keys.includes(hm) ? hm : keys[0], hw);
+}
+
+async function openMarket(key, week){
+  MKT = key;
+  document.querySelectorAll("#mtabs button").forEach(b => b.classList.toggle("on", b.dataset.m===key));
+  try{ INDEX = await getJSON(`data/${MKT}/index.json`); }
+  catch(e){ $("#meta").textContent = ""; $("#grid").innerHTML = `<tr><td class="empty-state">아직 데이터가 없음. GitHub Actions의 첫 실행(백필)이 끝나면 표시됨.</td></tr>`; $("#sizeT").innerHTML=""; return; }
+  $("#mtag").textContent = INDEX.label || "미국";
+  document.title = `업종 심리 지도 · ${INDEX.label || "미국"}`;
+  const cur = INDEX.currency || "달러";
+  $("#meta").textContent = `최근 거래일 ${INDEX.last_day} · 유니버스 ${INDEX.universe} (시총 ${moneyFmt(INDEX.min_mcap/1e8, cur)} 이상 → ${INDEX.n_stocks.toLocaleString()}종목, 월 1회 고정) · 갱신 ${INDEX.generated}`;
+  $("#week").innerHTML = INDEX.weeks.slice().reverse().map(w => `<option value="${w}">${w.slice(5).replace("-","/")}(월) 주</option>`).join("");
+  await openWeek(INDEX.weeks.includes(week) ? week : INDEX.weeks[INDEX.weeks.length-1]);
 }
 
 async function openWeek(key){
-  W = await getJSON(`data/weeks/${key}.json`);
+  W = await getJSON(`data/${MKT}/weeks/${key}.json`);
   $("#week").value = key;
-  history.replaceState(null, "", "#"+key);
+  history.replaceState(null, "", `#${MKT}/${key}`);
   const i = INDEX.weeks.indexOf(key);
   $("#prev").disabled = i<=0; $("#next").disabled = i>=INDEX.weeks.length-1;
   render();
@@ -298,7 +326,31 @@ function render(){
     `<span class="lg" style="border:0;background:none">주간 기준 업종 수</span>`;
   const evTxt = Object.entries(ev).map(([d,e]) => `${d.slice(5)} ${e.join("·")}`).join(" / ");
   $("#foot").textContent = (evTxt ? "⚑ " + evTxt + "  ·  " : "") + "칸에 마우스를 올리면 세부 수치, 요일 머리글을 누르면 그날 기준 정렬.";
+  renderSize(dates);
   if(drill) renderDrill();
+}
+
+function renderSize(dates){
+  const z = W.size;
+  if(!z || !z.buckets){ $("#sizeT").innerHTML = `<tr><td class="empty-state">이 주는 규모 데이터가 없음.</td></tr>`; return; }
+  const w = S.weight, scale = w==="cw" ? 3 : 3;
+  $("#szw").textContent = w==="cw" ? "시총가중" : "동일가중";
+  $("#szdesc").textContent = `규모는 연초 시가총액 순위 기준(${z.ref} 종가). 수익률은 절대값 %, 가중 방식은 위 토글을 따름. 쏠림은 그날 거래대금 중 상위 ${z.conc?.top?.length||10}종목 몫.`;
+  let h = `<thead><tr><th class="l">규모 (연초 시총 순위)</th><th class="wk">주간</th>` +
+    dates.map((d,i) => `<th>${WD[i]} <span class="mono">${d.slice(5).replace("-","/")}</span></th>`).join("") + `</tr></thead><tbody>`;
+  for(const b of z.buckets){
+    const wv = b.week[w];
+    h += `<tr><td class="l"><b>${esc(b.label)}</b><span>${b.n.toLocaleString()}</span></td>` +
+      `<td class="wk mono ${wv>=0?"pos":"neg"}"><b>${wv==null?"–":fmt(wv,2)+"%"}</b></td>` +
+      dates.map(d => { const v = b.day[d]?.[w]; return v==null ? `<td class="mono" style="color:var(--ink3)">·</td>` : `<td class="mono" style="${heat(v,scale)}">${fmt(v,2)}</td>`; }).join("") + `</tr>`;
+  }
+  if(z.conc){
+    const tops = (z.conc.top||[]).map(t => { const r = W.stocks.rows.find(x => x[0]===t); return r ? r[1] : t; });
+    h += `<tr class="conc"><td class="l" title="${esc("주간 상위: "+tops.join(", "))}"><b>쏠림</b><span>거래대금 상위 ${tops.length||10} 몫</span></td>` +
+      `<td class="wk mono">${z.conc.week==null?"–":z.conc.week.toFixed(1)+"%"}</td>` +
+      dates.map(d => { const v = z.conc.day[d]; return `<td class="mono">${v==null?"·":v.toFixed(1)+"%"}</td>`; }).join("") + `</tr>`;
+  }
+  $("#sizeT").innerHTML = h + "</tbody>";
 }
 
 /* ── 드릴다운 ─────────────────────────── */
@@ -310,9 +362,17 @@ function openDrill(sec, day){
 }
 function closeDrill(){ drill=null; $("#sheet").classList.remove("open"); document.body.style.overflow=""; }
 
-function money(eok){
+function moneyFmt(eok, cur){
+  if(eok==null || !isFinite(eok)) return "–";
+  const a = Math.abs(eok);
+  return a >= 10000 ? (eok/10000).toFixed(a>=100000?1:2)+"조 "+cur : Math.round(eok).toLocaleString()+"억 "+cur;
+}
+const money = eok => moneyFmt(eok, INDEX?.currency || "달러");
+function moneyDelta(eok){
   if(eok==null) return "–";
-  return eok >= 10000 ? (eok/10000).toFixed(2)+"조 달러" : Math.round(eok).toLocaleString()+"억 달러";
+  const a = Math.abs(eok), sgn = eok>0 ? "+" : eok<0 ? "−" : "";
+  const body = a >= 10000 ? (a/10000).toFixed(2)+"조" : Math.round(a).toLocaleString()+"억";
+  return sgn + body;
 }
 function heat(v, scale=5){
   if(v==null) return "";
@@ -327,7 +387,7 @@ function renderDrill(){
   const dayPos = dates.map(d => have.indexOf(d));
   const wk = s.week, cw = S.weight==="cw";
   const c = classify(wk, true);
-  $("#crumb").textContent = `미국 · 업종 · ${W.week.slice(5).replace("-","/")}(월) 주`;
+  $("#crumb").textContent = `${INDEX.label || "미국"} · 업종 · ${W.week.slice(5).replace("-","/")}(월) 주`;
   $("#dtitle").textContent = s.name;
   $("#dstats").innerHTML =
     `<span>주간 <b class="${(cw?s.ret_cw:s.ret_ew)>=0?"pos":"neg"} mono">${fmt(cw?s.ret_cw:s.ret_ew,2)}%</b></span>` +
@@ -345,7 +405,7 @@ function renderDrill(){
   if(q) rows = rows.filter(r => (r[0]+" "+r[1]+" "+r[3]).toLowerCase().includes(q));
   const val = (r, col) => {
     if(col[0]==="d" && col!=="d"){ const p = dayPos[+col.slice(1)]; return p<0 ? null : r[4][p]; }
-    return {name:r[1], ind:r[3], week:r[5], up:r[6], share:r[7], valx:r[8], mcap:r[9]}[col];
+    return {name:r[1], ind:r[3], week:r[5], up:r[6], share:r[7], valx:r[8], mcap:r[9], dmcap:r[10]}[col];
   };
   rows.sort((a,b) => {
     const x = val(a,dSort.col), y = val(b,dSort.col);
@@ -358,14 +418,14 @@ function renderDrill(){
   const th = (col, label, cls="") => `<th class="sortable${dSort.col===col?" sorted":""}${cls}" data-col="${col}">${label}${dSort.col===col?(dSort.dir<0?" ▾":" ▴"):""}</th>`;
   let h = `<thead><tr><th>#</th>${th("name","종목"," l")}${th("ind","산업"," l")}` +
     dates.map((d,i) => th("d"+i, `${WD[i]} <span class="mono">${d.slice(5).replace("-","/")}</span>`, hl(i))).join("") +
-    th("week","주간", drill.day==="week"?" hl":"") + th("up","상승일 거래") + th("share","거래 몫") + th("valx","거래 배수") + th("mcap","시총") + `</tr></thead><tbody>`;
+    th("week","주간", drill.day==="week"?" hl":"") + th("up","상승일 거래") + th("share","거래 몫") + th("valx","거래 배수") + th("mcap","시총") + th("dmcap","시총 증감") + `</tr></thead><tbody>`;
   rows.forEach((r,n) => {
     h += `<tr><td class="mono" style="color:var(--ink3)">${n+1}</td><td class="nm l"><b>${esc(r[1])}</b><small class="mono">${esc(r[0])}</small></td><td class="ind l" title="${esc(r[3])}">${esc(r[3])}</td>`;
     dayPos.forEach((p,i) => { const v = p<0?null:r[4][p]; h += `<td class="mono${hl(i)}" style="${heat(v)}">${v==null?"·":fmt(v)}</td>`; });
     const up = r[6];
     h += `<td class="mono ${r[5]>=0?"pos":"neg"}${drill.day==="week"?" hl":""}" style="${heat(r[5],8)}">${r[5]==null?"–":fmt(r[5])+"%"}</td>` +
       `<td class="mono" style="${up==null?"":`background:rgba(${up>=50?"209,52,74":"47,98,196"},${Math.abs(up-50)/50*.5})`}">${up==null?"–":up+"%"}</td>` +
-      `<td class="mono">${r[7]?.toFixed(2)}%</td><td class="mono">${r[8]==null?"–":r[8].toFixed(2)+"x"}</td><td class="mono">${money(r[9])}</td></tr>`;
+      `<td class="mono">${r[7]?.toFixed(2)}%</td><td class="mono">${r[8]==null?"–":r[8].toFixed(2)+"x"}</td><td class="mono">${money(r[9])}</td><td class="mono ${r[10]>0?"pos":r[10]<0?"neg":""}">${moneyDelta(r[10])}</td></tr>`;
   });
   $("#stocks").innerHTML = h + "</tbody>";
 }
@@ -380,6 +440,10 @@ document.querySelectorAll("[data-t]").forEach(inp => inp.addEventListener("chang
 }));
 $("#reset").onclick = () => { Object.assign(S, DEF); save(); if(W) render(); };
 $("#week").onchange = e => openWeek(e.target.value);
+$("#mtabs").addEventListener("click", e => {
+  const b = e.target.closest("button[data-m]"); if(!b || b.dataset.m===MKT) return;
+  closeDrill(); sortCol = "week"; openMarket(b.dataset.m, W?.week);
+});
 $("#prev").onclick = () => openWeek(INDEX.weeks[INDEX.weeks.indexOf(W.week)-1]);
 $("#next").onclick = () => openWeek(INDEX.weeks[INDEX.weeks.indexOf(W.week)+1]);
 $("#grid").addEventListener("click", e => {
