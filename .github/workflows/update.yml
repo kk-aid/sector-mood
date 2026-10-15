@@ -2,7 +2,7 @@ name: update-sector-mood
 
 on:
   schedule:
-    # 평일 22:30 UTC = 한국 07:30 (미국장 마감 후)
+    # 평일 22:30 UTC = 한국 07:30 (미국장 마감 후, 서머타임 여부와 무관하게 안전)
     - cron: "30 22 * * 1-5"
   workflow_dispatch:
     inputs:
@@ -11,6 +11,10 @@ on:
         default: "2"
       rebuild_universe:
         description: "이번 달 유니버스를 새로 구성"
+        type: boolean
+        default: false
+      notify:
+        description: "텔레그램 알림 보내기 (예약 실행은 항상 전송)"
         type: boolean
         default: false
 
@@ -38,6 +42,7 @@ jobs:
       - name: Run pipeline
         run: |
           WEEKS="${{ github.event.inputs.weeks || '2' }}"
+          # 첫 실행이면 자동으로 26주 백필
           if [ ! -f docs/data/index.json ]; then WEEKS=26; fi
           ARGS="--weeks $WEEKS"
           if [ "${{ github.event.inputs.rebuild_universe }}" = "true" ]; then ARGS="$ARGS --rebuild-universe"; fi
@@ -51,3 +56,24 @@ jobs:
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "data: $(date -u +%Y-%m-%d)"
           git push
+
+      - name: Telegram morning brief
+        if: github.event_name == 'schedule' || github.event.inputs.notify == 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m pipeline.notify
+
+      - name: Telegram failure alert
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ]; then exit 0; fi
+          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "text=⚠️ <b>업종 심리 지도 갱신 실패</b>
+          <a href=\"${RUN_URL}\">실행 로그 보기</a>"
