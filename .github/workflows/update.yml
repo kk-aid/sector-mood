@@ -1,0 +1,54 @@
+yaml
+name: update-sector-mood
+
+on:
+  schedule:
+    # 평일 22:30 UTC = 한국 07:30 (미국장 마감 후)
+    - cron: "30 22 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      weeks:
+        description: "다시 계산할 최근 주 수 (백필은 26 권장)"
+        default: "2"
+      rebuild_universe:
+        description: "이번 달 유니버스를 새로 구성"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sector-mood
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Run pipeline
+        run: |
+          WEEKS="${{ github.event.inputs.weeks || '2' }}"
+          if [ ! -f docs/data/index.json ]; then WEEKS=26; fi
+          ARGS="--weeks $WEEKS"
+          if [ "${{ github.event.inputs.rebuild_universe }}" = "true" ]; then ARGS="$ARGS --rebuild-universe"; fi
+          python -m pipeline.run $ARGS
+
+      - name: Commit data
+        run: |
+          git config user.name "sector-mood-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data data/universe
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "data: $(date -u +%Y-%m-%d)"
+          git push
