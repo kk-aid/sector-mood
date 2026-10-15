@@ -2,12 +2,19 @@ name: update-sector-mood
 
 on:
   schedule:
-    # 평일 22:30 UTC = 한국 07:30 (미국장 마감 후, 서머타임 여부와 무관하게 안전)
+    # 평일 22:30 UTC = 한국 07:30 → 미국 (전일 장 마감 후)
     - cron: "30 22 * * 1-5"
+    # 평일 07:40 UTC = 한국 16:40 → 한국·일본 (당일 장 마감 후)
+    - cron: "40 7 * * 1-5"
   workflow_dispatch:
     inputs:
+      market:
+        description: "시장"
+        type: choice
+        options: [all, us, kr, jp]
+        default: all
       weeks:
-        description: "다시 계산할 최근 주 수 (백필은 26 권장)"
+        description: "다시 계산할 최근 주 수 (데이터가 없는 시장은 자동 26주 백필)"
         default: "2"
       rebuild_universe:
         description: "이번 달 유니버스를 새로 구성"
@@ -28,41 +35,69 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
 
       - run: pip install -r requirements.txt
 
-      - name: Run pipeline
+      - name: Decide markets
+        id: m
         run: |
-          WEEKS="${{ github.event.inputs.weeks || '2' }}"
-          # 첫 실행이면 자동으로 26주 백필
-          if [ ! -f docs/data/index.json ]; then WEEKS=26; fi
-          ARGS="--weeks $WEEKS"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            if [ "${{ github.event.schedule }}" = "30 22 * * 1-5" ]; then M="us"; else M="kr jp"; fi
+          else
+            M="${{ github.event.inputs.market }}"
+            if [ "$M" = "all" ] || [ -z "$M" ]; then M="us kr jp"; fi
+          fi
+          echo "list=$M" >> "$GITHUB_OUTPUT"
+          echo "대상 시장: $M"
+
+      - name: Run pipeline
+        id: run
+        run: |
+          ARGS="--weeks ${{ github.event.inputs.weeks || '2' }}"
           if [ "${{ github.event.inputs.rebuild_universe }}" = "true" ]; then ARGS="$ARGS --rebuild-universe"; fi
-          python -m pipeline.run $ARGS
+          OK=""; FAIL=""
+          for M in ${{ steps.m.outputs.list }}; do
+            echo "::group::$M"
+            if python -m pipeline.run --market "$M" $ARGS; then OK="$OK $M"; else FAIL="$FAIL $M"; fi
+            echo "::endgroup::"
+          done
+          echo "ok=$OK" >> "$GITHUB_OUTPUT"
+          echo "fail=$FAIL" >> "$GITHUB_OUTPUT"
+          echo "성공:$OK / 실패:$FAIL"
 
       - name: Commit data
         run: |
           git config user.name "sector-mood-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/data data/universe
+          git add -A docs/data data/universe
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
-          git commit -m "data: $(date -u +%Y-%m-%d)"
+          git commit -m "data: ${{ steps.m.outputs.list }} $(date -u +%Y-%m-%d)"
+          git pull --rebase --autostash
           git push
 
-      - name: Telegram morning brief
+      - name: Telegram brief
         if: github.event_name == 'schedule' || github.event.inputs.notify == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -m pipeline.notify
+        run: |
+          for M in ${{ steps.run.outputs.ok }}; do
+            python -m pipeline.notify --market "$M"
+          done
+
+      - name: Fail if any market failed
+        if: steps.run.outputs.fail != ''
+        run: |
+          echo "실패한 시장:${{ steps.run.outputs.fail }}"
+          exit 1
 
       - name: Telegram failure alert
         if: failure()
@@ -70,10 +105,11 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          FAILED: ${{ steps.run.outputs.fail }}
         run: |
           if [ -z "$TELEGRAM_BOT_TOKEN" ]; then exit 0; fi
           curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
             --data-urlencode "parse_mode=HTML" \
-            --data-urlencode "text=⚠️ <b>업종 심리 지도 갱신 실패</b>
+            --data-urlencode "text=⚠️ <b>업종 심리 지도 갱신 실패</b> ${FAILED}
           <a href=\"${RUN_URL}\">실행 로그 보기</a>"
