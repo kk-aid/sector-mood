@@ -18,6 +18,13 @@ PRICE_HISTORY = "9mo"             # yfinance 다운로드 기간 (백필 여유 
 RET_CLIP = 0.5                    # 동일가중 계산 시 일간 수익률 ±50% 클리핑 (데이터 오류 방어)
 MARKET_SPIKE = 1.4                # 시장 전체 거래대금이 20일 평균의 1.4배 이상이면 이벤트일 플래그
 
+# ── 텔레그램 알림 판정 기준 (화면 기본값과 동일) ─────────
+NOTIFY_WEIGHT = "cw"              # cw=시총가중, ew=동일가중
+NOTIFY_MODE = "fixed"             # fixed=고정 %p, sigma=변동성 σ
+NOTIFY_TURN = "tv"                # tv=거래대금, vr=거래량
+NOTIFY_THR = {"dR": 1.0, "wR": 2.0, "zR": 1.0, "dT": 1.10, "wT": 1.05}
+NOTIFY_TOP_STOCKS = 3             # 거래 몰린 업종마다 함께 보여줄 대형 종목 수
+
 # ── 업종 이름 (FactSet 20개 섹터 → 한국어) ───────────────
 SECTOR_KO = {
     "Commercial Services": "상업 서비스",

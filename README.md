@@ -21,6 +21,21 @@ GitHub Actions가 매일 아침(한국 07:30) 데이터를 수집·계산하고,
 
 이후에는 평일마다 자동 갱신됨. 수동 갱신은 Actions 탭에서 Run workflow.
 
+## 1-1. 텔레그램 아침 알림 (선택)
+
+평일 아침 갱신이 끝나면 전일 미국장 업종 심리 요약이 텔레그램으로 옴. 갱신이 실패하면 실패 알림이 옴.
+
+1. 텔레그램에서 `@BotFather` → `/newbot` → 이름 입력 → **토큰** 받음 (`123456:ABC...` 형태)
+2. 만든 봇과 대화창을 열고 아무 메시지나 보냄
+3. 브라우저에서 `https://api.telegram.org/bot<토큰>/getUpdates` 접속 → `"chat":{"id":숫자` 의 숫자가 **chat id**
+   - 채널로 받으려면 봇을 채널 관리자로 추가하고 chat id 에 `@채널아이디` 입력
+4. 저장소 **Settings → Secrets and variables → Actions → New repository secret** 으로 두 개 등록
+   - `TELEGRAM_BOT_TOKEN` = 토큰
+   - `TELEGRAM_CHAT_ID` = chat id
+5. 테스트: Actions → Run workflow → **텔레그램 알림 보내기** 체크 후 실행
+
+판정 기준은 `pipeline/config.py` 의 `NOTIFY_*` 값임(기본: 시총가중·고정 %p·거래대금). 메시지 미리보기는 `python -m pipeline.notify --dry-run`.
+
 ## 2. 구조
 
 ```
