@@ -21,6 +21,9 @@ on:
         description: "직전 실행과 결과가 같아도 전송"
         type: boolean
         default: false
+      check:
+        description: "진단: 쉼표로 구분한 종목명·코드의 포함·제외 이유만 로그에 출력 (전송 안 함)"
+        default: ""
 
 permissions:
   contents: write
@@ -59,7 +62,16 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           # 신고가만 다른 채널로 받고 싶으면 NEWHIGH_CHAT_ID 시크릿 등록 (없으면 기존 채팅으로)
           TELEGRAM_CHAT_ID: ${{ secrets.NEWHIGH_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
+          CHECK: ${{ github.event.inputs.check }}
         run: |
+          if [ -n "$CHECK" ]; then
+            for M in ${{ steps.m.outputs.list }}; do
+              echo "::group::$M 진단"
+              python -m pipeline.newhigh --market "$M" --check "$CHECK" || true
+              echo "::endgroup::"
+            done
+            exit 0
+          fi
           ARGS=""
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
           if [ "${{ github.event.inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
