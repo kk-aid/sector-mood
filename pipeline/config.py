@@ -87,14 +87,15 @@ def market(key: str) -> dict:
         raise SystemExit(f"알 수 없는 시장: {key} (가능: {', '.join(MARKETS)})")
     return {"key": key, **MARKETS[key]}
 # ── 신고가 알림 (pipeline/newhigh.py) ────────────────────
-# 그날 상승률 상위 top_n 안에서, 양봉·상승 마감 + 장중 신고가(당일 고가 ≥ 기준 고가)인 종목만 뽑음.
+# 그날 상승·양봉 마감 + 장중 신고가(당일 고가 ≥ 기준 고가)인 종목을 모두 뽑음.
+# top_n: None 이면 상승률 순위 제한 없음. 숫자를 넣으면 그날 상승률 상위 N 안에서만 찾음.
 # min_mcap·min_value 는 현지 통화. small_cap 미만은 small_label 로 묶음(None 이면 안 묶음).
 NEWHIGH = {
-    "kr": {"top_n": 50, "min_mcap": 0, "min_value": 0, "small_cap": 5e10,
+    "kr": {"top_n": None, "min_mcap": 0, "min_value": 0, "small_cap": 5e10,
            "small_label": "소형주·시총500억↓", "lang": "ko"},
-    "us": {"top_n": 50, "min_mcap": 3e8, "min_value": 5e6, "small_cap": None,
+    "us": {"top_n": None, "min_mcap": 3e8, "min_value": 5e6, "small_cap": None,
            "small_label": None, "lang": "en"},
-    "jp": {"top_n": 50, "min_mcap": 1e10, "min_value": 1e8, "small_cap": None,
+    "jp": {"top_n": None, "min_mcap": 1e10, "min_value": 1e8, "small_cap": None,
            "small_label": None, "lang": "en"},
 }
 NEWHIGH_TOL = 1e-4                    # 고가가 기준 고가의 99.99% 이상이면 신고가로 봄 (반올림 오차 흡수)

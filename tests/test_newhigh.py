@@ -31,6 +31,35 @@ def main():
     assert [r["name"] for r in w52] == ["B"], [r["name"] for r in w52]
     assert base[0]["rank"] == 1 and base[4]["rank"] == 5
 
+    # 순위 제한 없음(기본): 상승 종목 전체에서 신고가. 상위 5 밖이던 I(+4%) 포함, 하락 J·우선주 F·스팩 G 제외
+    base_all, ath_all, w52_all = newhigh.pick(rows)
+    assert [r["name"] for r in ath_all] == ["A", "E", "H", "I"], [r["name"] for r in ath_all]
+    assert [r["name"] for r in w52_all] == ["B"], [r["name"] for r in w52_all]
+    assert len(base_all) == 7 and base_all[-1]["name"] == "I" and base_all[-1]["rank"] == 7
+    assert config.NEWHIGH["kr"]["top_n"] is None
+
+    # 진단 문구
+    codes = {r["name"] for r in base}
+    assert newhigh.explain(rows[8], codes, 5).startswith("제외: 상승률 상위 5 밖")
+    assert newhigh.explain(rows[8], {r["name"] for r in base_all}, None).startswith("포함: 역대 신고가")
+    assert newhigh.explain(rows[3], codes, 5).startswith("제외: 양봉 아님")
+    assert newhigh.explain(rows[2], codes, 5).startswith("제외: 장중 고가가 52주 고가 미달")
+    assert newhigh.explain(rows[9], codes, 5).startswith("제외: 상승 마감 아님")
+    assert newhigh.explain(rows[6], codes, 5).startswith("제외: 우선주·스팩")
+
+    # 긴 메시지 분할: 각 조각 4096자 미만, 내용 손실 없음
+    many = [row(f"X{i:03d}", 5 + i / 100, 105, 100, 106, 106, 106, description=f"종목{i:03d}",
+                industry=f"Ind{i % 40}") for i in range(400)]
+    _, ath_m, _ = newhigh.pick(many)
+    long = newhigh.build_message("kr", date(2026, 10, 15), ath_m, [], {})
+    parts = newhigh.split_message(long)
+    assert len(long) > 4096 and len(parts) > 1 and all(len(p) < 4096 for p in parts)
+    assert parts[1].startswith(f"(2/{len(parts)})")
+    joined = "".join(parts)
+    assert all(f"종목{i:03d}" in joined for i in range(400))
+    one = newhigh.split_message("짧은 메시지")
+    assert one == ["짧은 메시지"]
+
     # 라벨: labels.csv → 소형주 → 산업 한국어
     labels = {("kr", "A"): "후공정·OSAT·장비"}
     assert newhigh.label_of(rows[0], "kr", labels) == "후공정·OSAT·장비"
@@ -68,10 +97,11 @@ def main():
     assert labels.get(("kr", "042700")) and labels.get(("us", "NVDA")) and labels.get(("jp", "6857"))
     for mkt in config.MARKETS:
         base, ath, w52 = newhigh.pick(synthetic.newhigh_rows(mkt), config.NEWHIGH[mkt]["top_n"])
-        assert len(base) == config.NEWHIGH[mkt]["top_n"] and ath and w52
+        assert len(base) > 70 and ath and w52                  # 순위 제한 없음 → 합성 상승 종목 전체가 기준
         assert not any("스팩" in (r["description"] or "") or r["name"] == "999003" for r in ath + w52)
         msg = newhigh.build_message(mkt, date(2026, 10, 15), ath, w52, labels)
-        assert len(msg) < 4096
+        assert all(len(p) < 4096 for p in newhigh.split_message(msg))
+        assert "상승률 상위" not in msg
     print("test_newhigh: OK")
 
 
