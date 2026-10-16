@@ -17,6 +17,7 @@ const DESC = {
   rrg: "가로 = RS 추세(시장 대비 강도 ÷ 최근 10주 평균, 100 위면 평균보다 강함), 세로 = RS 모멘텀(RS 추세의 4주 변화, 100 위면 개선 중). 보통 개선 → 선도 → 약화 → 소외 순으로 시계 방향으로 돈다.",
   streak: "업종별 최근 12주 주간 판정 띠. 같은 판정이 이어지는 주 수(연속)를 보면 일회성 반짝인지 지속되는 흐름인지 구분할 수 있음.",
   trend: "종목별 이평 배열(일봉 5·20·60·120·200, 주봉 10·20·30·40), Weinstein Stage(30주선), Minervini 트렌드 템플릿 8조건과 업종 breadth(이평선 위 비율, 52주 신고가·신저가). 최신 거래일 기준 스냅샷.",
+  newhigh: "그날 상승·양봉 마감하며 장중 52주·역대 신고가를 낸 종목. 같은 섹터 라벨에 몰리면 군집으로 묶고, 종목마다 1년 차트·최근 공시·뉴스 헤드라인을 붙임. 재료는 '그날 나온 소식 목록'이지 원인 확정이 아님.",
   signal: "과거 판정이 다음 기간 시장 대비 성과와 연결되는지 집계한 것. 위의 가중·등락 기준·거래 기준·단위 선택을 그대로 따름. 표본·중첩·비용 한계는 아래 주의 사항 참고.",
 };
 
@@ -24,6 +25,7 @@ let S = load(), MKT = "us", VIEW = "map", WEEK = null, SECF = "";
 let MARKETS = [{key:"us", label:"미국", flag:"🇺🇸"}], INDEX = null, W = null;
 let cache = {}, sortCol = "week", drill = null, expanded = new Set(), rrgSel = null;
 let crossSort = "avg", trendF = {f:"all", sector:null, d:null, w:null};
+let NHDAY = null, nhF = {kind:"all", label:"", cluster:false}, followSort = -1;
 
 /* ── 유틸 ─────────────────────────────── */
 function load(){ try{ return {...DEF, ...JSON.parse(localStorage.getItem("sm-settings")||"{}")}; }catch(e){ return {...DEF}; } }
@@ -97,7 +99,7 @@ function hIndex(H, key){
 const hObj = (g, i) => i < 0 ? null : {rc:g.rc[i], re:g.re[i], sc:g.sc[i], se:g.se[i], tv:g.tv[i], vr:g.vr[i]};
 
 /* ── 라우팅 ────────────────────────────── */
-function setHash(){ history.replaceState(null, "", `#${MKT}/${VIEW}/${WEEK||""}`); }
+function setHash(){ history.replaceState(null, "", `#${MKT}/${VIEW}/${(VIEW==="newhigh" ? NHDAY : WEEK)||""}`); }
 function parseHash(){
   const p = location.hash.slice(1).split("/").filter(Boolean);
   const out = {};
@@ -113,6 +115,7 @@ async function init(){
   MARKETS = (await tryJSON("data/markets.json")) || MARKETS;
   const h = parseHash();
   if(h.view) VIEW = h.view;
+  if(VIEW==="newhigh" && h.week) NHDAY = h.week;
   $("#mtabs").innerHTML = MARKETS.length > 1 ? MARKETS.map(m => `<button data-m="${m.key}">${m.flag} ${m.label}</button>`).join("") : "";
   const keys = MARKETS.map(m => m.key);
   await openMarket(keys.includes(h.mkt) ? h.mkt : keys[0], h.week);
@@ -122,6 +125,7 @@ async function openMarket(key, week){
   MKT = key;
   document.querySelectorAll("#mtabs button").forEach(b => b.classList.toggle("on", b.dataset.m===key));
   INDEX = await tryJSON(`data/${MKT}/index.json`);
+  if(!INDEX && VIEW==="newhigh"){ $("#meta").textContent = ""; syncControls(); setHash(); await renderNewhigh(); return; }
   if(!INDEX){
     $("#meta").textContent = "";
     $("#view").innerHTML = `<div class="card"><div class="empty-state">아직 데이터가 없음. GitHub Actions의 첫 실행(백필)이 끝나면 표시됨.</div></div>`;
@@ -160,6 +164,7 @@ function syncControls(){
 }
 
 async function render(){
+  if(VIEW==="newhigh"){ syncControls(); setHash(); await renderNewhigh(); return; }
   if(!W) return;
   syncControls(); setHash();
   const fn = {map:renderMap, cross:renderCross, rrg:renderRRG, streak:renderStreak, trend:renderTrend, signal:renderSignal}[VIEW];
@@ -695,7 +700,7 @@ $("#prev").onclick = () => openWeek(INDEX.weeks[INDEX.weeks.indexOf(WEEK)-1]);
 $("#next").onclick = () => openWeek(INDEX.weeks[INDEX.weeks.indexOf(WEEK)+1]);
 $("#mtabs").addEventListener("click", e => {
   const b = e.target.closest("button[data-m]"); if(!b || b.dataset.m===MKT) return;
-  closeDrill(); sortCol = "week"; SECF = ""; rrgSel = null; openMarket(b.dataset.m, WEEK);
+  closeDrill(); sortCol = "week"; SECF = ""; rrgSel = null; NHDAY = null; nhF.label = ""; openMarket(b.dataset.m, WEEK);
 });
 $("#vtabs").addEventListener("click", e => {
   const b = e.target.closest("button[data-v]"); if(!b) return;
@@ -703,6 +708,14 @@ $("#vtabs").addEventListener("click", e => {
 });
 $("#view").addEventListener("click", async e => {
   const t = e.target;
+  if(VIEW==="newhigh"){
+    const nb = t.closest("[data-nh]");
+    if(nb){ const k = nb.dataset.nh; if(k==="cluster") nhF.cluster = !nhF.cluster; else nhF[k] = nb.dataset.nv; render(); return; }
+    const nl = t.closest("[data-nhl]");
+    if(nl && !t.closest("a")){ nhF.label = nhF.label===nl.dataset.nhl ? "" : nl.dataset.nhl; await render(); document.querySelector(".nhg")?.scrollIntoView({behavior:"smooth"}); return; }
+    if(t.closest("[data-fs]")){ followSort = -followSort; render(); return; }
+    return;
+  }
   const tog = t.closest("[data-tog]");
   if(tog){ const k = tog.dataset.tog; expanded.has(k) ? expanded.delete(k) : expanded.add(k); render(); return; }
   const s = t.closest("th[data-sort]");
@@ -736,4 +749,138 @@ $("#stocks").addEventListener("click", e => {
 $("#close").onclick = closeDrill;
 $("#sheet").addEventListener("click", e => { if(e.target.id==="sheet") closeDrill(); });
 document.addEventListener("keydown", e => { if(e.key==="Escape" && drill) closeDrill(); });
+
+/* ══ 8. 신고가 ═════════════════════════════ */
+const KIND = {ATH:"역대", "52W":"52주"};
+function nhLinks(st){
+  const c = encodeURIComponent(st.code), ex = st.exchange ? `${st.exchange}:` : "";
+  const tv = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(ex+st.code)}`;
+  const info = MKT==="kr" ? `https://finance.naver.com/item/main.naver?code=${c}` :
+               MKT==="jp" ? `https://finance.yahoo.co.jp/quote/${c}.T` : `https://finance.yahoo.com/quote/${c}`;
+  const disc = MKT==="kr" ? `https://finance.naver.com/item/news_notice.naver?code=${c}` :
+               MKT==="jp" ? `https://kabutan.jp/stock/news?code=${c}` : `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${c}&type=8-K`;
+  const a = (u,t) => `<a href="${esc(u)}" target="_blank" rel="noopener">${t}</a>`;
+  return `${a(tv,"차트")} · ${a(info, MKT==="kr"?"네이버":"Yahoo")} · ${a(disc, MKT==="kr"?"공시":MKT==="jp"?"kabutan":"EDGAR")}`;
+}
+function nhChart(ch, w=300, h=110){
+  if(!ch || !ch.c || ch.c.length < 10) return `<div class="nhc-empty">차트 데이터 없음</div>`;
+  const c = ch.c, n = c.length, st = ch.step || 2;
+  const ma = k => { const m = Math.max(1, Math.round(k/st)); return c.map((_,i) => i+1 < m ? null : c.slice(i+1-m, i+1).reduce((a,b)=>a+b,0)/m); };
+  const show = Math.min(n, Math.round(252/st));               // 최근 1년만 그림 (이평은 앞 구간으로 계산)
+  const from = n - show;
+  const lines = [{v:c, col:"var(--ink)", w:1.4}, {v:ma(20), col:"var(--up)", w:.9}, {v:ma(50), col:"var(--warn)", w:.9}, {v:ma(200), col:"var(--dn)", w:.9}];
+  const vis = lines.flatMap(l => l.v.slice(from).filter(x => x!=null));
+  if(ch.p52) vis.push(ch.p52);
+  let lo = Math.min(...vis), hi = Math.max(...vis); const pad = (hi-lo)*.06 || 1; lo -= pad; hi += pad;
+  const X = i => (i-from)/(show-1)*(w-6)+3, Y = v => h-4-(v-lo)/(hi-lo)*(h-8);
+  let s = `<svg viewBox="0 0 ${w} ${h}" class="nhc" preserveAspectRatio="none">`;
+  if(ch.p52) s += `<line x1="0" x2="${w}" y1="${Y(ch.p52).toFixed(1)}" y2="${Y(ch.p52).toFixed(1)}" stroke="var(--ink3)" stroke-dasharray="3 3" stroke-width="1"/>`;
+  for(const l of lines.slice(1).concat(lines.slice(0,1))){
+    let d = ""; for(let i = from; i < n; i++){ const v = l.v[i]; if(v==null) continue; d += `${d?"L":"M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`; }
+    if(d) s += `<path d="${d}" fill="none" stroke="${l.col}" stroke-width="${l.w}" vector-effect="non-scaling-stroke"/>`;
+  }
+  s += `<circle cx="${X(n-1).toFixed(1)}" cy="${Y(c[n-1]).toFixed(1)}" r="3" fill="var(--up)"/>`;
+  return s + `</svg>`;
+}
+function nhMat(list, cls){
+  if(!list || !list.length) return "";
+  return list.map(x => `<li class="${cls}"><a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a> <span>${esc(x.s||"")} ${esc(md(x.d||"----------"))}</span></li>`).join("");
+}
+
+async function renderNewhigh(){
+  const NI = await tryJSON(`data/${MKT}/newhigh/index.json`);
+  if(!NI || !NI.days || !NI.days.length){
+    $("#view").innerHTML = `<div class="card"><div class="empty-state">신고가 기록이 아직 없음. new-highs 워크플로가 한 번 실행되면(평일 07:20·16:20 자동, 또는 Actions에서 수동 실행) 표시됨.</div></div>`;
+    return;
+  }
+  if(!NHDAY || !NI.days.includes(NHDAY)) NHDAY = NI.days[NI.days.length-1];
+  setHash();
+  const D = await getJSON(`data/${MKT}/newhigh/${NHDAY}.json`);
+  const cur = INDEX?.currency || {us:"달러", kr:"원", jp:"엔"}[MKT];
+  const cl = D.clusters || [], clSet = new Set(cl.map(c => c.label));
+  const perf = D.perf || {};
+  const labelsAll = [...new Set(D.stocks.map(s => s.label))];
+  if(nhF.label && !labelsAll.includes(nhF.label)) nhF.label = "";
+  let stocks = D.stocks.filter(s => (nhF.kind==="all" || s.kind===nhF.kind) && (!nhF.label || s.label===nhF.label) && (!nhF.cluster || clSet.has(s.label)));
+
+  // 컨트롤
+  const dayOpts = NI.days.slice().reverse().map(d => `<option value="${d}"${d===NHDAY?" selected":""}>${d}</option>`).join("");
+  const chip = (k,v,l) => `<button class="chipb${nhF[k]===v?" on":""}" data-nh="${k}" data-nv="${v}">${l}</button>`;
+  const nATH = D.stocks.filter(s => s.kind==="ATH").length;
+  let h = `<div class="bar" style="margin-top:0">
+    <div class="grp"><label>날짜</label><select id="nhday">${dayOpts}</select></div>
+    <div class="filters">${chip("kind","all",`전체 ${D.stocks.length}`)}${chip("kind","ATH",`🏆 역대 ${nATH}`)}${chip("kind","52W",`📈 52주 ${D.stocks.length-nATH}`)}
+      <button class="chipb${nhF.cluster?" on":""}" data-nh="cluster">🔥 군집만</button></div>
+    <div class="grp"><label>라벨</label><select id="nhlab"><option value="">전체</option>${labelsAll.map(l => `<option${l===nhF.label?" selected":""}>${esc(l)}</option>`).join("")}</select></div>
+  </div>`;
+
+  // 군집 표
+  if(cl.length){
+    h += `<h2 class="sh" style="margin-top:6px">🔥 군집 <span class="tag">같은 라벨 ${3}종목 이상 또는 5일 누적 6종목 이상</span></h2>
+      <div class="card"><div class="scroll"><table class="tbl"><thead><tr><th class="l">라벨</th><th>오늘</th><th>5일</th><th>20일</th><th class="l">업종 흐름 (업종 심리 지도)</th><th class="l">재료 (공시·뉴스 첫 항목)</th><th>신고가 이후</th></tr></thead><tbody>`;
+    for(const c of cl){
+      const ss = D.stocks.filter(s => s.label===c.label);
+      const f = ss.flatMap(s => (s.filings||[]).slice(0,1).map(x => ({...x, nm:s.name, k:"공시"})))[0] ||
+                ss.flatMap(s => (s.news||[]).slice(0,1).map(x => ({...x, nm:s.name, k:"뉴스"})))[0];
+      const cx = c.context;
+      const ctx = cx ? `${esc(cx.industry)} ${cx.rc!=null?fmt(cx.rc)+"%p":""}${cx.quad?` · <b>${esc(cx.quad)}</b>`:""}${cx.up_weeks>=2?` · ${cx.up_weeks}주 연속 상회`:""}` : `<span style="color:var(--ink3)">–</span>`;
+      const pf = perf[c.label];
+      h += `<tr class="click" data-nhl="${esc(c.label)}"><td class="l"><b>${esc(c.label)}</b></td><td class="mono"><b>${c.n}</b></td><td class="mono">${c.n5}</td><td class="mono">${c.n20}</td>
+        <td class="l" style="white-space:normal;min-width:180px">${ctx}</td>
+        <td class="l" style="white-space:normal;min-width:240px">${f?`<span style="color:var(--ink3)">${f.k} ${esc(f.nm)}:</span> <a href="${esc(f.u)}" target="_blank" rel="noopener">${esc(f.t)}</a>`:`<span style="color:var(--ink3)">재료 미확인</span>`}</td>
+        <td class="mono">${pf?`<span class="${pf.med>=0?"pos":"neg"}">${fmt(pf.med)}%</span> <span style="color:var(--ink3);font-size:11px">${pf.n}건·${pf.hit}%↑</span>`:"–"}</td></tr>`;
+    }
+    h += `</tbody></table></div></div>`;
+  }
+
+  // 라벨 × 날짜 히트맵 (최근 20 기록일)
+  const days = Object.keys(NI.counts).sort().slice(-20);
+  const tot = {};
+  days.forEach(d => Object.entries(NI.counts[d]).forEach(([l,n]) => tot[l] = (tot[l]||0)+n));
+  const hl = Object.keys(tot).filter(l => tot[l] >= 2).sort((a,b) => tot[b]-tot[a]).slice(0, 25);
+  if(hl.length && days.length > 1){
+    const mx = Math.max(...hl.flatMap(l => days.map(d => NI.counts[d][l]||0)));
+    h += `<h2 class="sh">라벨별 신고가 추이 <span class="tag">최근 ${days.length} 기록일 · 누적 2종목 이상</span></h2>
+      <div class="card"><div class="scroll"><table class="tbl strip"><thead><tr><th class="l">라벨</th>${days.map(d => `<th class="c" style="padding:8px 2px;font-size:11px">${md(d)}</th>`).join("")}<th>합계</th></tr></thead><tbody>` +
+      hl.map(l => `<tr class="click" data-nhl="${esc(l)}"><td class="l"><b>${esc(l)}</b></td>` + days.map(d => { const v = NI.counts[d][l]||0;
+        return `<td class="s" style="${v?`background:rgba(209,52,74,${(.15+.6*v/mx).toFixed(2)})`:""}" title="${esc(`${d} · ${l} ${v}종목`)}">${v||""}</td>`; }).join("") + `<td class="mono">${tot[l]}</td></tr>`).join("") +
+      `</tbody></table></div></div>`;
+  }
+
+  // 종목 카드 (라벨별, 군집 먼저)
+  const groups = {};
+  stocks.forEach(s => (groups[s.label] = groups[s.label] || []).push(s));
+  const gorder = Object.keys(groups).sort((a,b) => (clSet.has(b)-clSet.has(a)) || groups[b].length-groups[a].length || Math.max(...groups[b].map(s=>s.change))-Math.max(...groups[a].map(s=>s.change)));
+  h += `<h2 class="sh">종목 <span class="tag">${stocks.length}종목 · ${D.day}</span></h2>
+    <p class="sdesc">차트: 최근 1년 종가(검정), 20·50·200일선(빨강·주황·파랑), 점선 = 직전 52주 고점. 뉴스·공시는 최근 ${3}일, 제목과 링크만 표시함. 재료가 없으면 수급·순환매일 가능성도 있음.</p>`;
+  for(const g of gorder){
+    const ss = groups[g].sort((a,b) => b.change-a.change);
+    h += `<div class="nhg"><div class="nhg-h"><b>${esc(g)}</b> <span>${ss.length}종목</span>${clSet.has(g)?` <span class="badge up">군집</span>`:""}</div><div class="nhgrid">`;
+    for(const st of ss){
+      const mat = nhMat(st.filings, "f") + nhMat(st.news, "n");
+      h += `<div class="nhcard"><div class="nhh"><div><b>${esc(st.name)}</b> <small class="mono">${esc(st.code)}</small></div>
+          <div class="mono"><span class="pos"><b>${fmt(st.change)}%</b></span> <span class="badge${st.kind==="ATH"?" up":""}">${KIND[st.kind]}</span></div></div>
+        <div class="nhm">${esc(st.industry||"")} · 시총 ${moneyFmt(st.mcap, cur)}${st.rank?` · 상승률 ${st.rank}위`:""}</div>
+        ${nhChart(st.chart)}
+        <div class="nhl">${nhLinks(st)}</div>
+        ${mat ? `<ul class="nhmat">${mat}</ul>` : `<div class="nhmat-none">최근 공시·뉴스 없음</div>`}</div>`;
+    }
+    h += `</div></div>`;
+  }
+  if(!stocks.length) h += `<div class="card"><div class="empty-state">조건에 맞는 종목이 없음.</div></div>`;
+
+  // 신고가 이후 성과
+  const fl = (D.follow||[]).slice().sort((a,b) => (a.ret-b.ret)*followSort);
+  if(fl.length){
+    h += `<h2 class="sh">신고가 이후 성과 <span class="tag">최근 ${new Set(fl.map(x=>x.date)).size} 기록일 · 기록 당일 종가 → 최신 종가</span></h2>
+      <p class="sdesc">지난 기록일에 신고가로 잡힌 종목이 지금까지 얼마나 이어졌는지. 라벨별 중앙값은 위 군집 표 '신고가 이후' 칸에 있음. 표본이 작고 기간이 짧아 참고용임.</p>
+      <div class="card"><div class="scroll" style="max-height:520px;overflow:auto"><table class="tbl"><thead><tr><th class="l">신고가일</th><th class="l">종목</th><th class="l">라벨</th><th>구분</th><th class="sortable sorted" data-fs="1">이후 수익률 ${followSort<0?"▾":"▴"}</th><th>경과 거래일</th></tr></thead><tbody>` +
+      fl.slice(0, 200).map(x => `<tr><td class="l mono">${esc(x.date)}</td><td class="l"><b>${esc(x.name)}</b> <small class="mono" style="color:var(--ink3)">${esc(x.code)}</small></td><td class="l">${esc(x.label)}</td><td class="ctr">${KIND[x.kind]||esc(x.kind)}</td><td class="mono ${x.ret>=0?"pos":"neg"}" style="${heat(x.ret, 15)}">${fmt(x.ret)}%</td><td class="mono">${x.days}</td></tr>`).join("") +
+      `</tbody></table></div></div>`;
+  }
+  $("#view").innerHTML = h;
+  $("#nhday").onchange = e => { NHDAY = e.target.value; render(); };
+  $("#nhlab").onchange = e => { nhF.label = e.target.value; render(); };
+}
+
 init();

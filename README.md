@@ -67,7 +67,7 @@ GitHub Actions가 평일 두 번 데이터를 수집·계산하고, GitHub Pages
 | 일본 | 16:20 (당일 장) | 시총 100억 엔·거래대금 1억 엔 이상 |
 | 미국 | 07:20 (전일 장) | 시총 3억 달러·거래대금 500만 달러 이상 |
 
-**판정**: ① 그날 상승률 상위 50 안 (우선주·스팩 제외 후 순위) ② 종가 > 시가, 상승 마감 ③ 당일 고가 ≥ 역대 최고가 / 52주 최고가. 52주 목록은 역대 신고가 종목을 뺀 나머지임. 고가는 TradingView 기준(분할·무상증자 반영)이라 증자 후 신고가가 빠지지 않음.
+**판정**: ① 상승 마감 + 종가 > 시가 (우선주·스팩 제외) ② 당일 고가 ≥ 역대 최고가 / 52주 최고가. 상승률 순위 제한은 기본으로 없음(`NEWHIGH[시장]["top_n"]` 에 숫자를 넣으면 상위 N 안에서만 찾음). 52주 목록은 역대 신고가 종목을 뺀 나머지임. 고가는 TradingView 기준(분할·무상증자 반영)이라 증자 후 신고가가 빠지지 않음.
 
 **섹터 라벨**: `data/newhigh/labels.csv` 에 있는 종목은 그 라벨, 없으면 FactSet 산업명(한국어). 테마 라벨(예: 대북, 정치)을 붙이고 싶으면 이 파일에 `market,code,label` 한 줄 추가하면 됨.
 
@@ -76,6 +76,17 @@ GitHub Actions가 평일 두 번 데이터를 수집·계산하고, GitHub Pages
 - 기준 바꾸기: `pipeline/config.py` 의 `NEWHIGH` (상위 몇 위, 시총·거래대금 하한, 소형주 기준)
 - 다른 채널로 받기: 시크릿 `NEWHIGH_CHAT_ID` 추가 (없으면 `TELEGRAM_CHAT_ID` 로 감)
 - 미리보기: Actions → **new-highs** → Run workflow → *전송·기록 없이* 체크, 또는 `python -m pipeline.newhigh --market kr --dry-run`
+- 특정 종목이 왜 빠졌는지: Run workflow 의 **check** 칸에 `KT&G,코웨이` 처럼 입력 → 로그에 종목별 포함·제외 이유와 시가·종가·고가·52주 고가 출력
+
+**보강 (차트·재료·군집)** — 기존 메시지(라벨·기업명·등락률)는 그대로 두고 덧붙임
+- 🔥 **군집**: 같은 라벨에서 당일 3종목 이상(또는 5일 누적 6종목 이상)이면 맨 위에 요약, 라벨 줄 아래에 `└ 업종:` (업종 심리 지도의 주간 상대 등락·로테이션 분면) · `└ 공시`/`└ 뉴스` 한두 줄
+- 📊 **차트 이미지**: 군집 상위 3개(없으면 상승률 상위 6종목)를 1년 일봉·20/50/200일선·직전 52주 고점선·거래량으로 묶어 사진으로 전송
+- 🔗 **사이트 '신고가' 탭**: 날짜별 전 종목 카드(차트·공시·뉴스·차트/네이버/공시 바로가기), 군집 표, 라벨별 신고가 추이, 신고가 이후 성과
+- 재료 소스: 뉴스는 Google News RSS(최근 3일, 제목·링크만), 공시는 한국 DART(시크릿 `DART_API_KEY` 등록 시) · 미국 SEC EDGAR. 일본은 뉴스만.
+- 재료는 '그날 나온 소식 목록'이지 원인 확정이 아님. 공시·뉴스가 없으면 "재료 미확인"으로 표시함.
+- 보강이 실패해도 기존 신고가 메시지는 그대로 전송됨. 끄려면 `python -m pipeline.newhigh --no-enrich`.
+
+**DART 키 등록 (한국 공시, 무료)**: opendart.fss.or.kr → 인증키 신청 → 발급된 40자리 키를 저장소 **Settings → Secrets and variables → Actions** 에 `DART_API_KEY` 로 등록. 등록 다음 실행부터 자동으로 공시가 붙음.
 
 ## 2. 구조
 
@@ -87,7 +98,8 @@ pipeline/
   compute.py    섹터·산업 지표, 규모와 쏠림, 시총 증감 → docs/data/<시장>/weeks/YYYY-MM-DD.json
   analytics.py  주간 이력·로테이션·신호 검증·추세(이평 배열/Stage/Minervini/breadth) → history/signals/trend.json
   run.py        실행 진입점
-  newhigh.py    신고가 알림 (TradingView 스크리너 1회 조회 → 판정 → 기록 → 텔레그램)
+  newhigh.py    신고가 알림 (TradingView 스크리너 조회 → 판정 → 기록 → 텔레그램)
+  newhigh_enrich.py  신고가 보강 (1년 가격·차트 이미지·공시·뉴스·군집·업종 흐름·사후 성과 → 사이트 JSON)
   synthetic.py  네트워크 없이 테스트용 가짜 시장
 docs/
   index.html    화면 틀·스타일

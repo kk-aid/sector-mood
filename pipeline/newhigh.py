@@ -22,6 +22,7 @@ import hashlib
 import html
 import json
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import requests
@@ -139,7 +140,8 @@ def display_name(r: dict, mkt: str) -> str:
 
 
 # ── 메시지 ──────────────────────────────────────────────
-def _section(title: str, items: list[dict], mkt: str, labels: dict, note: str = "") -> list[str]:
+def _section(title: str, items: list[dict], mkt: str, labels: dict, note: str = "",
+             notes: dict | None = None, used: set | None = None) -> list[str]:
     e = html.escape
     groups: dict[str, list[dict]] = {}
     for r in items:
@@ -150,20 +152,36 @@ def _section(title: str, items: list[dict], mkt: str, labels: dict, note: str = 
         names = ", ".join(f"{e(display_name(x, mkt))} {x['change']:+.1f}%"
                           for x in sorted(groups[k], key=lambda x: -x["change"]))
         out.append(f"({e(k)}) {names}")
+        if notes and k in notes and used is not None and k not in used:   # 군집 재료는 처음 나올 때 한 번만
+            out += notes[k]
+            used.add(k)
     return out
 
 
-def build_message(mkt: str, day, ath: list[dict], w52: list[dict], labels: dict) -> str:
+def build_message(mkt: str, day, ath: list[dict], w52: list[dict], labels: dict,
+                  extra: dict | None = None) -> str:
+    """기존 형식(라벨·기업명·등락률) 그대로. extra(보강 결과)가 있으면 군집 요약·재료 줄·링크를 덧붙임."""
     m, c = config.market(mkt), config.NEWHIGH[mkt]
+    e = html.escape
     cond = f"상승률 상위 {c['top_n']} · " if c.get("top_n") else ""
     lines = [f"{m['flag']} <b>{m['label']} 신고가 · {day:%Y.%m.%d}({WD[day.weekday()]})</b>",
              f"{cond}상승·양봉 마감 · 장중 신고가"]
+    clusters = (extra or {}).get("clusters") or []
+    today_cl = [cl for cl in clusters if cl["n"] >= 2]
+    if today_cl:
+        lines.append("🔥 군집: " + " · ".join(f"{e(cl['label'])} {cl['n']}" for cl in today_cl[:6]))
+        acc = sorted(clusters, key=lambda cl: -cl["n5"])[:4]
+        if any(cl["n5"] > cl["n"] for cl in acc):
+            lines.append("   5일 누적: " + " · ".join(f"{e(cl['label'])} {cl['n5']}" for cl in acc))
+    notes, used = (extra or {}).get("notes"), set()
     if not ath and not w52:
         lines += ["", "조건을 충족한 종목 없음"]
     if ath:
-        lines += [""] + _section("🏆 역대 신고가", ath, mkt, labels)
+        lines += [""] + _section("🏆 역대 신고가", ath, mkt, labels, notes=notes, used=used)
     if w52:
-        lines += [""] + _section("📈 52주 신고가", w52, mkt, labels, " (역대 제외)")
+        lines += [""] + _section("📈 52주 신고가", w52, mkt, labels, " (역대 제외)", notes=notes, used=used)
+    if (extra or {}).get("url") and (ath or w52):
+        lines += ["", f'<a href="{e(extra["url"])}">🔗 차트·재료 전체 보기</a>']
     return "\n".join(lines)
 
 
@@ -270,6 +288,7 @@ def main():
     ap.add_argument("--force", action="store_true", help="직전과 결과가 같아도 전송")
     ap.add_argument("--synthetic", action="store_true", help="네트워크 없이 합성 데이터 사용")
     ap.add_argument("--check", metavar="이름,코드", help="쉼표로 구분한 종목의 포함·제외 이유만 출력")
+    ap.add_argument("--no-enrich", action="store_true", help="차트·공시·뉴스·군집 보강 없이 기존 메시지만")
     a = ap.parse_args()
     mkt = a.market
     if a.check:
@@ -284,20 +303,55 @@ def main():
         rows = scan(mkt)
     base, ath, w52 = pick(rows, config.NEWHIGH[mkt].get("top_n"))
     labels = load_labels()
-    text = build_message(mkt, day, ath, w52, labels)
     print(f"[newhigh:{mkt}] 기준 {len(base)}종목 · 역대 {len(ath)} · 52주 {len(w52)}")
+
+    if not a.dry_run:
+        sig = signature(base)
+        if sig == last_sig(mkt) and not a.force:
+            print(f"[newhigh:{mkt}] 직전 실행과 결과 동일 (휴장일 추정) → 전송·기록 생략")
+            return
+        record(mkt, day, ath, w52, labels, sig)
+
+    extra = None
+    if not a.no_enrich and (ath or w52):
+        import tempfile
+        from . import newhigh_enrich
+        try:
+            extra = newhigh_enrich.run(
+                mkt, day, ath, w52, lambda r: label_of(r, mkt, labels), lambda r: display_name(r, mkt),
+                synthetic=a.synthetic, out_png=Path(tempfile.mkdtemp(prefix="newhigh_")),
+                write_site=not a.dry_run)
+        except Exception as ex:  # noqa: BLE001  보강이 실패해도 기존 메시지는 보냄
+            print(f"[newhigh:{mkt}] 보강 실패 → 기존 메시지만 전송: {ex!r}")
+    text = build_message(mkt, day, ath, w52, labels, extra)
+    charts = (extra or {}).get("charts", [])
 
     if a.dry_run:
         print("\n\n".join(split_message(text)))
+        for pth, cap in charts:
+            print(f"[차트] {pth} — {cap}")
         return
-    sig = signature(base)
-    if sig == last_sig(mkt) and not a.force:
-        print(f"[newhigh:{mkt}] 직전 실행과 결과 동일 (휴장일 추정) → 전송·기록 생략")
-        return
-    record(mkt, day, ath, w52, labels, sig)
     from .notify import send
     for part in split_message(text):
         send(part)
+    for pth, cap in charts:
+        try:
+            send_photo(pth, cap)
+        except Exception as ex:  # noqa: BLE001
+            print(f"[newhigh:{mkt}] 차트 전송 실패: {ex}")
+
+
+def send_photo(path, caption: str):
+    import os
+    token, chat = os.environ.get("TELEGRAM_BOT_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        print(f"[newhigh] 텔레그램 설정 없음 → 차트 전송 생략 ({path})")
+        return
+    with open(path, "rb") as f:
+        r = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", timeout=60,
+                          data={"chat_id": chat, "caption": caption[:1000]}, files={"photo": f})
+    if not r.ok:
+        raise RuntimeError(f"{r.status_code}: {r.text[:200]}")
 
 
 if __name__ == "__main__":

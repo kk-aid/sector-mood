@@ -100,6 +100,12 @@ NEWHIGH = {
 }
 NEWHIGH_TOL = 1e-4                    # 고가가 기준 고가의 99.99% 이상이면 신고가로 봄 (반올림 오차 흡수)
 NEWHIGH_EXCLUDE = ("스팩", "SPAC", "Acquisition Corp", "Acquisition Corporation")
+NEWHIGH_CLUSTER_MIN = 3               # 같은 라벨에서 당일 N종목 이상 신고가면 군집 (5일 누적 2N 이상도 포함)
+NEWHIGH_ENRICH_MAX = 60               # 뉴스·공시를 찾을 최대 종목 수 (군집 종목 우선, 이후 상승률 순)
+NEWHIGH_CHART_MAX = 3                 # 텔레그램 차트 이미지 수 (군집 상위, 군집 없으면 상승률 상위 묶음)
+NEWHIGH_CHART_PER_IMG = 6             # 차트 이미지 한 장당 종목 수
+NEWHIGH_FOLLOW_DAYS = 20              # 신고가 이후 성과를 추적할 과거 기록일 수
+NEWHIGH_SITE_KEEP_DAYS = 60           # 사이트 '신고가' 탭 일별 파일 보관 일수
 NEWHIGH_ROOT = ROOT / "data" / "newhigh"   # labels.csv(섹터 라벨, 직접 수정 가능) · 시장별 기록
 
 # FactSet 산업 → 한국어 (labels.csv 에 없는 종목의 섹터 라벨)
