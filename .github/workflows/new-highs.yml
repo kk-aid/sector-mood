@@ -1,0 +1,97 @@
+name: new-highs
+
+on:
+  schedule:
+    # 평일 22:20 UTC = 한국 07:20 → 미국 (전일 장 마감 후)
+    - cron: "20 22 * * 1-5"
+    # 평일 07:20 UTC = 한국 16:20 → 한국·일본 (당일 장 마감 후)
+    - cron: "20 7 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      market:
+        description: "시장"
+        type: choice
+        options: [all, us, kr, jp]
+        default: all
+      dry_run:
+        description: "전송·기록 없이 메시지만 로그에 출력"
+        type: boolean
+        default: false
+      force:
+        description: "직전 실행과 결과가 같아도 전송"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: new-highs
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Decide markets
+        id: m
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            if [ "${{ github.event.schedule }}" = "20 22 * * 1-5" ]; then M="us"; else M="kr jp"; fi
+          else
+            M="${{ github.event.inputs.market }}"
+            if [ "$M" = "all" ] || [ -z "$M" ]; then M="kr jp us"; fi
+          fi
+          echo "list=$M" >> "$GITHUB_OUTPUT"
+
+      - name: Scan and notify
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          # 신고가만 다른 채널로 받고 싶으면 NEWHIGH_CHAT_ID 시크릿 등록 (없으면 기존 채팅으로)
+          TELEGRAM_CHAT_ID: ${{ secrets.NEWHIGH_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          ARGS=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
+          FAIL=""
+          for M in ${{ steps.m.outputs.list }}; do
+            echo "::group::$M"
+            python -m pipeline.newhigh --market "$M" $ARGS || FAIL="$FAIL $M"
+            echo "::endgroup::"
+          done
+          if [ -n "$FAIL" ]; then echo "실패:$FAIL"; exit 1; fi
+
+      - name: Commit records
+        if: always()
+        run: |
+          git config user.name "sector-mood-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A data/newhigh
+          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git commit -m "newhigh: ${{ steps.m.outputs.list }} $(date -u +%Y-%m-%d)"
+          git pull --rebase --autostash
+          git push
+
+      - name: Telegram failure alert
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ]; then exit 0; fi
+          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "text=⚠️ <b>신고가 알림 실패</b> ${{ steps.m.outputs.list }}
+          <a href=\"${RUN_URL}\">실행 로그 보기</a>"
