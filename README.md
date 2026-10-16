@@ -57,6 +57,26 @@ GitHub Actions가 평일 두 번 데이터를 수집·계산하고, GitHub Pages
 
 미국은 아침 7시 40분경, 한국·일본은 오후 4시 50분경 시장별로 따로 옴. 판정 기준은 `pipeline/config.py` 의 `NOTIFY_*` 값임(기본: 시총가중·고정 %p·거래대금). 메시지 미리보기는 `python -m pipeline.notify --market kr --dry-run`.
 
+## 1-2. 신고가 알림 (한국·미국·일본)
+
+장 마감 후 **역대 신고가(ATH)** 와 **52주 신고가** 종목을 섹터별로 묶어 텔레그램으로 보냄. 1-1 에서 등록한 봇·시크릿을 그대로 씀.
+
+| 시장 | 실행 시각 (한국) | 기본 필터 |
+|---|---|---|
+| 한국 | 16:20 (당일 장) | 시총·거래대금 제한 없음, 시총 500억 미만은 `소형주·시총500억↓` 로 묶음 |
+| 일본 | 16:20 (당일 장) | 시총 100억 엔·거래대금 1억 엔 이상 |
+| 미국 | 07:20 (전일 장) | 시총 3억 달러·거래대금 500만 달러 이상 |
+
+**판정**: ① 그날 상승률 상위 50 안 (우선주·스팩 제외 후 순위) ② 종가 > 시가, 상승 마감 ③ 당일 고가 ≥ 역대 최고가 / 52주 최고가. 52주 목록은 역대 신고가 종목을 뺀 나머지임. 고가는 TradingView 기준(분할·무상증자 반영)이라 증자 후 신고가가 빠지지 않음.
+
+**섹터 라벨**: `data/newhigh/labels.csv` 에 있는 종목은 그 라벨, 없으면 FactSet 산업명(한국어). 테마 라벨(예: 대북, 정치)을 붙이고 싶으면 이 파일에 `market,code,label` 한 줄 추가하면 됨.
+
+**기록**: `data/newhigh/<시장>/YYYY-MM.csv` 에 매일 누적. 휴장일에는 직전과 결과가 같아 자동으로 건너뜀.
+
+- 기준 바꾸기: `pipeline/config.py` 의 `NEWHIGH` (상위 몇 위, 시총·거래대금 하한, 소형주 기준)
+- 다른 채널로 받기: 시크릿 `NEWHIGH_CHAT_ID` 추가 (없으면 `TELEGRAM_CHAT_ID` 로 감)
+- 미리보기: Actions → **new-highs** → Run workflow → *전송·기록 없이* 체크, 또는 `python -m pipeline.newhigh --market kr --dry-run`
+
 ## 2. 구조
 
 ```
@@ -67,12 +87,14 @@ pipeline/
   compute.py    섹터·산업 지표, 규모와 쏠림, 시총 증감 → docs/data/<시장>/weeks/YYYY-MM-DD.json
   analytics.py  주간 이력·로테이션·신호 검증·추세(이평 배열/Stage/Minervini/breadth) → history/signals/trend.json
   run.py        실행 진입점
+  newhigh.py    신고가 알림 (TradingView 스크리너 1회 조회 → 판정 → 기록 → 텔레그램)
   synthetic.py  네트워크 없이 테스트용 가짜 시장
 docs/
   index.html    화면 틀·스타일
   app.js        화면 로직 (6개 보기)
   data/         계산 결과 (Actions가 매일 커밋)
 data/universe/  시장별·월별 유니버스 스냅샷
+data/newhigh/   신고가 섹터 라벨(labels.csv)·시장별 월간 기록
 tests/          계산 검증 (손계산 대조)
 ```
 

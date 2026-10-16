@@ -45,3 +45,39 @@ def make(n_days: int = 180, seed: int = 7, end: str | None = None):
     C = pd.DataFrame(close, index=dates, columns=T)
     V = pd.DataFrame(vol.round(), index=dates, columns=T)
     return universe, C.copy(), C, V
+
+
+def newhigh_rows(mkt: str = "kr", seed: int = 5) -> list[dict]:
+    """신고가 알림 테스트용 TradingView 스크리너 응답 흉내 (등락률 내림차순 아님 — pick 이 정렬함)."""
+    rng = np.random.default_rng(seed)
+    codes = {
+        "kr": [("042700", "한미반도체"), ("011200", "HMM"), ("277810", "레인보우로보틱스"),
+               ("352820", "하이브"), ("012450", "한화에어로스페이스"), ("999001", "테스트소형주"),
+               ("999002", "가나다스팩1호"), ("999003", "음봉전자")],
+        "us": [("NVDA", "NVIDIA"), ("CRWD", "CrowdStrike"), ("RKLB", "Rocket Lab"), ("ZZZZ", "Zeta Co")],
+        "jp": [("6857", "Advantest Corporation"), ("7832", "Bandai Namco Holdings Inc."),
+               ("9999", "Example Co., Ltd.")],
+    }[mkt]
+    inds = ["Semiconductors", "Marine Shipping", "Industrial Machinery", "Movies/Entertainment",
+            "Aerospace & Defense", "Packaged Software"]
+    rows = []
+    for i in range(80):
+        code, name = codes[i] if i < len(codes) else (f"{mkt}{i:04d}", f"종목{i}")
+        chg = float(rng.uniform(0.5, 29.0))
+        close = float(rng.uniform(1_000, 100_000))
+        open_ = close / (1 + chg / 100) * float(rng.uniform(0.98, 1.0))
+        high = close * float(rng.uniform(1.0, 1.03))
+        kind = i % 4                       # 0: 역대 신고가, 1: 52주만, 2: 신고가 아님, 3: 랜덤
+        ath = high if kind == 0 else high * 1.5
+        w52 = high if kind in (0, 1) else high * 1.2
+        row = {"name": code, "description": name, "close": close, "open": open_, "high": high,
+               "change": chg, "market_cap_basic": float(rng.uniform(1e10, 5e13)), "Value.Traded": 1e10,
+               "High.All": ath, "price_52_week_high": w52, "industry": inds[i % len(inds)],
+               "exchange": "KRX", "type": "stock", "subtype": "common"}
+        if code == "999001":
+            row["market_cap_basic"] = 3e10
+        if code == "999003":
+            row["open"] = close * 1.05     # 음봉
+        rows.append(row)
+    rows.append({**rows[0], "name": "005935", "description": "삼성전자우", "subtype": "preferred"})
+    return rows

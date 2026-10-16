@@ -86,3 +86,74 @@ def market(key: str) -> dict:
     if key not in MARKETS:
         raise SystemExit(f"알 수 없는 시장: {key} (가능: {', '.join(MARKETS)})")
     return {"key": key, **MARKETS[key]}
+# ── 신고가 알림 (pipeline/newhigh.py) ────────────────────
+# 그날 상승률 상위 top_n 안에서, 양봉·상승 마감 + 장중 신고가(당일 고가 ≥ 기준 고가)인 종목만 뽑음.
+# min_mcap·min_value 는 현지 통화. small_cap 미만은 small_label 로 묶음(None 이면 안 묶음).
+NEWHIGH = {
+    "kr": {"top_n": 50, "min_mcap": 0, "min_value": 0, "small_cap": 5e10,
+           "small_label": "소형주·시총500억↓", "lang": "ko"},
+    "us": {"top_n": 50, "min_mcap": 3e8, "min_value": 5e6, "small_cap": None,
+           "small_label": None, "lang": "en"},
+    "jp": {"top_n": 50, "min_mcap": 1e10, "min_value": 1e8, "small_cap": None,
+           "small_label": None, "lang": "en"},
+}
+NEWHIGH_TOL = 1e-4                    # 고가가 기준 고가의 99.99% 이상이면 신고가로 봄 (반올림 오차 흡수)
+NEWHIGH_EXCLUDE = ("스팩", "SPAC", "Acquisition Corp", "Acquisition Corporation")
+NEWHIGH_ROOT = ROOT / "data" / "newhigh"   # labels.csv(섹터 라벨, 직접 수정 가능) · 시장별 기록
+
+# FactSet 산업 → 한국어 (labels.csv 에 없는 종목의 섹터 라벨)
+INDUSTRY_KO = {
+    "Advertising/Marketing Services": "광고·마케팅", "Aerospace & Defense": "방산·우주",
+    "Agricultural Commodities/Milling": "농산물", "Air Freight/Couriers": "항공화물·택배",
+    "Airlines": "항공사", "Alternative Power Generation": "신재생 발전", "Aluminum": "알루미늄",
+    "Apparel/Footwear": "의류·신발", "Apparel/Footwear Retail": "의류 소매",
+    "Auto Parts: OEM": "자동차 부품", "Automotive Aftermarket": "자동차 애프터마켓",
+    "Beverages: Alcoholic": "주류", "Beverages: Non-Alcoholic": "음료", "Biotechnology": "바이오",
+    "Broadcasting": "방송", "Building Products": "건자재", "Cable/Satellite TV": "케이블·위성방송",
+    "Casinos/Gaming": "카지노·게임", "Chemicals: Agricultural": "농화학",
+    "Chemicals: Major Diversified": "화학", "Chemicals: Specialty": "특수화학", "Coal": "석탄",
+    "Commercial Printing/Forms": "인쇄", "Computer Communications": "네트워크 장비",
+    "Computer Peripherals": "컴퓨터 주변기기", "Computer Processing Hardware": "컴퓨터 하드웨어",
+    "Construction Materials": "건설자재", "Consumer Sundries": "생활잡화",
+    "Containers/Packaging": "포장재", "Contract Drilling": "시추", "Data Processing Services": "데이터 처리",
+    "Department Stores": "백화점", "Discount Stores": "할인점", "Drugstore Chains": "드럭스토어",
+    "Electric Utilities": "전력", "Electrical Products": "전기장비", "Electronic Components": "전자부품",
+    "Electronic Equipment/Instruments": "전자장비·계측", "Electronic Production Equipment": "반도체·전자 장비",
+    "Electronics Distributors": "전자 유통", "Electronics/Appliance Stores": "가전 매장",
+    "Electronics/Appliances": "가전", "Engineering & Construction": "건설",
+    "Environmental Services": "환경 서비스", "Finance/Rental/Leasing": "캐피탈·리스",
+    "Financial Conglomerates": "금융지주", "Financial Publishing/Services": "금융 정보",
+    "Food Distributors": "식품 유통", "Food Retail": "식품 소매", "Food: Major Diversified": "식품",
+    "Food: Meat/Fish/Dairy": "육류·수산·유제품", "Food: Specialty/Candy": "제과·특수식품",
+    "Forest Products": "목재", "Gas Distributors": "가스", "Home Furnishings": "가구·인테리어",
+    "Home Improvement Chains": "홈인테리어 매장", "Homebuilding": "주택건설",
+    "Hospital/Nursing Management": "병원", "Hotels/Resorts/Cruise lines": "호텔·레저",
+    "Household/Personal Care": "생활용품·화장품", "Industrial Conglomerates": "복합기업",
+    "Industrial Machinery": "기계", "Industrial Specialties": "산업소재",
+    "Information Technology Services": "IT 서비스", "Insurance Brokers/Services": "보험 중개",
+    "Integrated Oil": "석유 메이저", "Internet Retail": "이커머스",
+    "Internet Software/Services": "인터넷", "Investment Banks/Brokers": "증권",
+    "Investment Managers": "자산운용", "Investment Trusts/Mutual Funds": "투자회사",
+    "Life/Health Insurance": "생명보험", "Major Banks": "은행", "Major Telecommunications": "통신",
+    "Managed Health Care": "건강보험", "Marine Shipping": "조선·해운", "Media Conglomerates": "미디어",
+    "Medical Distributors": "의약품 유통", "Medical Specialties": "의료기기",
+    "Medical/Nursing Services": "의료 서비스", "Metal Fabrication": "금속가공", "Miscellaneous": "기타",
+    "Miscellaneous Commercial Services": "상업 서비스", "Miscellaneous Manufacturing": "기타 제조",
+    "Motor Vehicles": "자동차", "Movies/Entertainment": "엔터·영화", "Multi-Line Insurance": "종합보험",
+    "Office Equipment/Supplies": "사무용품", "Oil & Gas Pipelines": "송유관",
+    "Oil & Gas Production": "원유·가스 생산", "Oil Refining/Marketing": "정유",
+    "Oilfield Services/Equipment": "유전 서비스", "Other Consumer Services": "소비자 서비스",
+    "Other Consumer Specialties": "소비재", "Other Metals/Minerals": "비철금속",
+    "Other Transportation": "운송", "Packaged Software": "소프트웨어", "Personnel Services": "인력 서비스",
+    "Pharmaceuticals: Generic": "제네릭 제약", "Pharmaceuticals: Major": "제약",
+    "Pharmaceuticals: Other": "제약", "Precious Metals": "귀금속", "Property/Casualty Insurance": "손해보험",
+    "Publishing: Books/Magazines": "출판", "Publishing: Newspapers": "신문", "Pulp & Paper": "제지",
+    "Railroads": "철도", "Real Estate Development": "부동산 개발", "Real Estate Investment Trusts": "리츠",
+    "Recreational Products": "레저용품", "Regional Banks": "지방은행", "Restaurants": "외식",
+    "Savings Banks": "저축은행", "Semiconductors": "반도체", "Services to the Health Industry": "헬스케어 서비스",
+    "Specialty Insurance": "특수보험", "Specialty Stores": "전문 소매", "Specialty Telecommunications": "특수 통신",
+    "Steel": "철강", "Telecommunications Equipment": "통신장비", "Textiles": "섬유",
+    "Tobacco": "담배", "Tools & Hardware": "공구", "Trucking": "트럭 운송",
+    "Trucks/Construction/Farm Machinery": "건설·농기계", "Water Utilities": "수도",
+    "Wholesale Distributors": "도매", "Wireless Telecommunications": "무선통신",
+}
