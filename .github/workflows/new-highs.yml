@@ -35,7 +35,7 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
@@ -45,6 +45,12 @@ jobs:
           cache: pip
 
       - run: pip install -r requirements.txt
+
+      - name: Korean font for charts
+        run: |
+          (sudo apt-get install -y -qq fonts-nanum || (sudo apt-get update -qq && sudo apt-get install -y -qq fonts-nanum)) > /dev/null \
+            || echo "폰트 설치 실패 — 차트의 한글이 깨질 수 있음"
+          fc-cache -f > /dev/null || true
 
       - name: Decide markets
         id: m
@@ -63,6 +69,8 @@ jobs:
           # 신고가만 다른 채널로 받고 싶으면 NEWHIGH_CHAT_ID 시크릿 등록 (없으면 기존 채팅으로)
           TELEGRAM_CHAT_ID: ${{ secrets.NEWHIGH_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
           CHECK: ${{ github.event.inputs.check }}
+          # 한국 공시(DART)는 이 시크릿이 있을 때만. opendart.fss.or.kr 에서 무료 발급
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
         run: |
           if [ -n "$CHECK" ]; then
             for M in ${{ steps.m.outputs.list }}; do
@@ -88,7 +96,7 @@ jobs:
         run: |
           git config user.name "sector-mood-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data/newhigh
+          git add -A data/newhigh docs/data
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -m "newhigh: ${{ steps.m.outputs.list }} $(date -u +%Y-%m-%d)"
           git pull --rebase --autostash
