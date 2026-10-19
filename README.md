@@ -227,3 +227,75 @@ cd docs && python -m http.server               # http://localhost:8000
   기준일이 그대로 표시되므로 최신성은 기준일을 확인한다.
 - 중복 방지는 주식/ETF 별도로 하며 전송이 모두 성공한 후 상태를 기록한다.
   전송 중 일부만 성공하고 재실행되면 일부 메시지가 중복될 수 있다.
+
+### DART 근거 기반 업종 검토
+
+`DART_API_KEY`는 기존 공시 조회와 같은 Actions secret을 재사용한다. 키 값을 파일이나
+로그에 쓰지 않는다. `dart-classification-review` 워크플로는 매주 월요일 05:50 KST에
+최대 40개 기업의 기업개황·최신 정기보고서 원문을 수집하며, 수동 실행도 가능하다.
+실제 API 인증 성공 여부는 해당 워크플로 실행 결과로 확인한다.
+
+- `python -m pipeline.dart_classify --codes 007660,042700 --dry-run`
+- `company.json`의 `induty_code`는 **공식 업종코드 원값**으로만 보관하며,
+  자체 세부업종 코드로 오인하거나 임의 번역하지 않는다.
+- `list.json`에서 가장 최근 정기보고서(정정 포함)를 찾고 `document.xml` ZIP의
+  '사업의 내용'을 추출한다. 후보별 키워드 문맥과 매출 관련 발췌·공시 링크를
+  `data/newhigh/classification/<종목코드>.json`에 저장한다.
+- 후보는 `needs_review`이며 자동 적용하지 않는다. 키워드가 고객사·경쟁사·신사업을
+  설명할 수 있으므로 매출 지배력이나 테마 노출을 확정하지 않는다. 업종 후보 규칙은
+  제한적이며, 규칙에 없는 업종은 기업개황·매출 발췌만 수집한다.
+- 승인된 분류는 `data/newhigh/taxonomy.csv`에 등록한다. `status=approved`,
+  `industry`, `source_url`, `reviewed_on`이 모두 있어야 실제 업종을 덮어쓴다.
+  `sector/industry/subindustry/themes`는 별개이며 복수 테마는 `|`로 구분한다.
+  보고서 매출 근거를 사람이 확인한 다음에만 approved로 변경한다.
+- **알림 묶음 기준 변경:** 승인 업종 → 공급자 FactSet 산업 → 미분류 순서이다.
+  기존 `labels.csv`는 출처가 검증되지 않은 테마/분류가 혼재하므로 기본 업종을
+  덮어쓰지 않고 `legacy_group` 참고 필드로 보존한다. 규모는 `[소형주]` 별도 태그이다.
+- 종목별 classification(섹터·업종·세부업종·테마·출처·검토상태·규모)은 새 신고가
+  상세 JSON에 포함한다. 기존 프런트엔드에 모든 필드를 새로 표시하는 변경은 포함하지 않는다.
+- 군집은 새 업종 기준으로 집계한다. 이전 테마 기준 기록과 섞이지 않도록 신규 기록에
+  `classification_version=business-v1`를 넣고, 과거 군집 누적은 같은 버전만 사용한다.
+  따라서 적용 직후 5/20일 누적은 새 기록부터 쌓인다. 과거 사후 성과 기록은 보존한다.
+
+공식 API 문서:
+https://opendart.fss.or.kr/guide/detail.do?apiGrpCd=DS001&apiId=2019002
+https://opendart.fss.or.kr/guide/detail.do?apiGrpCd=DS001&apiId=2019003
+
+### 토스증권 공식 섹터 연결 (PR #2 확장)
+
+기본 업종 소스는 **승인한 수동 분류 → 토스증권 → FactSet → 미분류** 순서이다.
+DART는 국내 기업의 애매한 분류를 검토하는 근거로 유지한다.
+토스의 대/중/소분류 및 국내·미국 주식/ETF의 복수 소속을 보존하며, 단일 계층일 때만
+기본 업종으로 사용한다. 여러 다른 하위업종에 속하면 임의 주력업종을 만들지 않고
+기존 공급자 업종으로 묶고 토스 복수 소속을 상세 메타데이터에 보존한다.
+ETF 소속과 주식 소속은 별도 키로 저장한다. 일본은 기존 공급자 분류를 사용한다.
+
+연결 준비:
+
+1. GitHub Actions Secrets에 `TOSS_CLIENT_ID`, `TOSS_CLIENT_SECRET` 등록.
+   다른 프로그램과 함께 쓰지 않는 별도 API 클라이언트를 권장한다. 토큰 재발급 시
+   같은 client의 기존 토큰이 즉시 무효화되기 때문이다.
+2. 토스 WTS 설정 → Open API → 허용 IP에 **실제 실행 환경의 고정 송신 IP** 등록.
+   일반 GitHub-hosted runner의 IP는 고정되지 않는다. 등록 가능한 고정 송신 IP가
+   있는 러너를 준비하고 Repository Variables의 `TOSS_RUNNER`에 runner label을 넣는다.
+   미설정이면 ubuntu-latest이며 IP 허용 조건을 충족하지 못하면 403으로 실패한다.
+   코드에서 IP 제한을 우회하거나 광범위한 IP를 자동 등록하지 않는다.
+3. `toss-sector-sync`를 수동으로 dry_run=true, probe=true로 실행해 연결 확인.
+   main에 이 코드가 반영되는 최초 push도 같은 소량 dry-run을 실행한다. PR 이벤트에는
+   비밀 키를 전달하지 않는다. 이 확인은 데이터 저장·텔레그램 전송을 하지 않는다.
+4. 연결 확인 후 dry_run=false로 전체 분류를 수집한다. 매일 05:30 KST 자동 갱신은
+   Repository Variables의 `TOSS_ENABLED=true`로 켠다. 그 전에는 예약 실행을 건너뛴다.
+
+공식 `Sector` API의 목록·구성 주식·관련 ETF만 GET으로 사용한다. 인증 토큰 교환 외
+POST, 계좌 조회·주문 엔드포인트는 사용하지 않으며 코드 allowlist로 차단한다.
+인증값·토큰을 파일·로그·저장소에 저장하지 않는다. 분류 캐시는
+`data/newhigh/toss/labels.json`이며, 전체 수집이 성공한 뒤에만 원자적으로 교체한다.
+14일 이상 오래된 캐시나 부분 조회 결과는 기본 분류로 사용하지 않는다.
+
+```
+python -m pipeline.toss_classify --dry-run --max-sectors 3
+python -m pipeline.toss_classify
+```
+
+공식 명세 확인 버전: 1.2.24
+https://openapi.tossinvest.com/openapi-docs/latest/openapi.json

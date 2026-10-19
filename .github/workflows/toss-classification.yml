@@ -1,0 +1,72 @@
+name: toss-sector-sync
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pipeline/toss_classify.py'
+      - '.github/workflows/toss-classification.yml'
+  schedule:
+    - cron: "30 20 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "조회만 하고 저장 안 함 (첫 연결 확인용)"
+        type: boolean
+        default: true
+      probe:
+        description: "연결 확인: 처음 3개 섹터만 조회 (dry-run 전용)"
+        type: boolean
+        default: true
+permissions:
+  contents: write
+concurrency:
+  group: toss-sector-sync
+  cancel-in-progress: false
+jobs:
+  sync:
+    if: github.event_name != 'schedule' || vars.TOSS_ENABLED == 'true'
+    # Use a runner whose outbound IP is registered with Toss.
+    runs-on: ${{ vars.TOSS_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Test classification
+        run: |
+          python -m unittest tests.test_toss_classify tests.test_taxonomy
+          python -m tests.test_newhigh
+      - name: Sync official sector classifications
+        env:
+          TOSS_CLIENT_ID: ${{ secrets.TOSS_CLIENT_ID }}
+          TOSS_CLIENT_SECRET: ${{ secrets.TOSS_CLIENT_SECRET }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          PROBE: ${{ inputs.probe }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          ARGS=()
+          if [ "$EVENT" = push ]; then
+            python -m pipeline.toss_classify --dry-run --max-sectors 3
+            exit 0
+          fi
+          if [ "$DRY_RUN" = true ]; then
+            ARGS+=(--dry-run)
+            if [ "$PROBE" = true ]; then ARGS+=(--max-sectors 3); fi
+          fi
+          python -m pipeline.toss_classify "${ARGS[@]}"
+      - name: Commit classification cache
+        if: github.event_name != 'push' && inputs.dry_run != true
+        run: |
+          git config user.name sector-mood-bot
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/newhigh/toss
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "classification: sync Toss sector memberships"
+          for ATTEMPT in 1 2 3 4 5; do
+            git pull --rebase --autostash
+            if git push; then exit 0; fi
+          done
+          exit 1
