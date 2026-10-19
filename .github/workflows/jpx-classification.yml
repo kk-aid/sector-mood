@@ -10,6 +10,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+# Japan-only pushes use a separate skipped group in apply-toss-site.yml,
+# so that the skipped KR/US run cannot replace this pending Japan refresh.
 concurrency:
   group: sector-mood
   cancel-in-progress: false
