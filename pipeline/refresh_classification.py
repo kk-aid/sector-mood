@@ -14,6 +14,17 @@ from .taxonomy import profile, reviewed_rows, toss_rows, labels_from_profile
 
 def refresh(market):
     reviewed = reviewed_rows()
+    provider = {}
+    if market == 'jp':
+        files = sorted((config.UNIVERSE_ROOT / market).glob('*.json'))
+        if files:
+            provider = {r['ticker']: r for r in json.loads(files[-1].read_text(encoding='utf-8'))}
+    def stock_profile(code, row=None):
+        old = provider.get(code, {})
+        base = {'name': code, 'industry': old.get('industry_en') or old.get('industry'), 'sector': old.get('sector')}
+        base.update({k:v for k,v in (row or {}).items() if v is not None})
+        return profile(base, market, reviewed=reviewed)
+    known_profiles = {}
     root = config.DATA_ROOT / market / 'newhigh'
     pages = [(p, json.loads(p.read_text(encoding='utf-8'))) for p in sorted(root.glob('20*.json'))]
     known = {}
@@ -23,9 +34,10 @@ def refresh(market):
             code = stock['code']
             row = {'name': code, 'industry': stock.get('industry'), 'sector': None,
                    'market_cap_basic': None if stock.get('mcap') is None else stock['mcap'] * 1e8}
-            p = profile(row, market, reviewed=reviewed)
+            p = stock_profile(code, row)
+            known_profiles[code] = p
             stock.setdefault('provider_label', stock['label'])
-            if p['source'] in ('toss', 'reviewed', 'unmapped', 'jpx', 'jpx_product', 'jpx_unmapped'):
+            if p['source'] in ('toss', 'reviewed', 'unmapped', 'jpx', 'jpx_product', 'jpx_unmapped', 'jp_mapped', 'jp_reviewed'):
                 stock['label'] = p['industry']
             else:
                 stock['label'] = p['industry'] if stock.get('industry') else stock['provider_label']
@@ -40,8 +52,8 @@ def refresh(market):
             fields, rows = reader.fieldnames, list(reader)
         for row in rows:
             code = row['code']
-            p = profile({'name': code}, market, reviewed=reviewed)
-            row['label'] = p['industry'] if p['source'] in ('toss', 'reviewed', 'unmapped', 'jpx', 'jpx_product', 'jpx_unmapped') else known.get(code, row['label'])
+            p = known_profiles.get(code) or stock_profile(code)
+            row['label'] = p['industry'] if p['source'] in ('toss', 'reviewed', 'unmapped', 'jpx', 'jpx_product', 'jpx_unmapped', 'jp_mapped', 'jp_reviewed') else known.get(code, row['label'])
             row['labels'] = json.dumps(labels_from_profile(p), ensure_ascii=False)
         with path.open('w', encoding='utf-8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=list(dict.fromkeys(fields + ['labels'])))
@@ -69,14 +81,14 @@ def refresh(market):
         for w in (5, 20):
             page[f'cum{w}'] = {k: len(v) for k, v in cum[w].items()}
         for row in page.get('follow', []):
-            p = profile({'name': row['code']}, market, reviewed=reviewed)
-            if p['source'] in ('toss', 'reviewed', 'unmapped', 'jpx', 'jpx_product', 'jpx_unmapped'):
+            p = known_profiles.get(row['code']) or stock_profile(row['code'])
+            if p['source'] in ('toss', 'reviewed', 'unmapped', 'jpx', 'jpx_product', 'jpx_unmapped', 'jp_mapped', 'jp_reviewed'):
                 row['label'] = p['industry']
             else:
                 row['label'] = known.get(row['code'], row['label'])
         perf = defaultdict(list)
         for row in page.get('follow', []):
-            p = profile({'name': row['code']}, market, reviewed=reviewed)
+            p = known_profiles.get(row['code']) or stock_profile(row['code'])
             row['labels'] = labels_from_profile(p)
             for label in row['labels']:
                 perf[label].append(row['ret'])

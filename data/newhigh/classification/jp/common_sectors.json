@@ -1,0 +1,422 @@
+{
+  "version": 1,
+  "reviewed_on": "2026-10-19",
+  "basis": "공급자 업종을 토스 공통 대분류에 명시적으로 대응. 기업의 토스 직접 소속을 뜻하지 않음. 복합·불명확 업종은 기존 분류 유지.",
+  "rules": [
+    {
+      "provider_industry": "Major Banks",
+      "root_id": "97",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Regional Banks",
+      "root_id": "97",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Investment Banks/Brokers",
+      "root_id": "97",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Finance/Rental/Leasing",
+      "root_id": "97",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Investment Managers",
+      "root_id": "97",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Life/Health Insurance",
+      "root_id": "97",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Property/Casualty Insurance",
+      "root_id": "97",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Multi-Line Insurance",
+      "root_id": "97",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Financial Conglomerates",
+      "root_id": "97",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Semiconductors",
+      "root_id": "169",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Motor Vehicles",
+      "root_id": "53",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Auto Parts: OEM",
+      "root_id": "53",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Automotive Aftermarket",
+      "root_id": "53",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Railroads",
+      "root_id": "1",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Air Freight/Couriers",
+      "root_id": "1",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Marine Shipping",
+      "root_id": "1",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Trucking",
+      "root_id": "1",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Airlines",
+      "root_id": "1",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Other Transportation",
+      "root_id": "1",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Packaged Software",
+      "root_id": "87",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Information Technology Services",
+      "root_id": "87",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Internet Software/Services",
+      "root_id": "87",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Data Processing Services",
+      "root_id": "87",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Computer Processing Hardware",
+      "root_id": "87",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Computer Peripherals",
+      "root_id": "87",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Computer Communications",
+      "root_id": "87",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Chemicals: Specialty",
+      "root_id": "129",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Chemicals: Major Diversified",
+      "root_id": "129",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Wholesale Distributors",
+      "root_id": "101",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Food Retail",
+      "root_id": "101",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Department Stores",
+      "root_id": "101",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Specialty Stores",
+      "root_id": "101",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Internet Retail",
+      "root_id": "101",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Drugstore Chains",
+      "root_id": "101",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Home Improvement Chains",
+      "root_id": "101",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Electronics/Appliance Stores",
+      "root_id": "101",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Electronics Distributors",
+      "root_id": "101",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Food Distributors",
+      "root_id": "101",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Pharmaceuticals: Major",
+      "root_id": "31",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Medical Specialties",
+      "root_id": "31",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Medical Distributors",
+      "root_id": "31",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Medical/Nursing Services",
+      "root_id": "31",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Biotechnology",
+      "root_id": "35",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Food: Specialty/Candy",
+      "root_id": "49",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Food: Meat/Fish/Dairy",
+      "root_id": "49",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Food: Major Diversified",
+      "root_id": "49",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Beverages: Alcoholic",
+      "root_id": "49",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Beverages: Non-Alcoholic",
+      "root_id": "49",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Engineering & Construction",
+      "root_id": "143",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Homebuilding",
+      "root_id": "143",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Building Products",
+      "root_id": "143",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Construction Materials",
+      "root_id": "143",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Steel",
+      "root_id": "147",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Aluminum",
+      "root_id": "147",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Other Metals/Minerals",
+      "root_id": "147",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Metal Fabrication",
+      "root_id": "147",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Electric Utilities",
+      "root_id": "91",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Gas Distributors",
+      "root_id": "255",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Oil Refining/Marketing",
+      "root_id": "249",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Integrated Oil",
+      "root_id": "249",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Oilfield Services/Equipment",
+      "root_id": "249",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Real Estate Investment Trusts",
+      "root_id": "557",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Electronic Components",
+      "root_id": "17",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Industrial Machinery",
+      "root_id": "67",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Tools & Hardware",
+      "root_id": "67",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Pulp & Paper",
+      "root_id": "47",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Forest Products",
+      "root_id": "47",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Apparel/Footwear",
+      "root_id": "11",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Apparel/Footwear Retail",
+      "root_id": "11",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Textiles",
+      "root_id": "11",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Electronics/Appliances",
+      "root_id": "111",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Movies/Entertainment",
+      "root_id": "137",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Broadcasting",
+      "root_id": "137",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Hotels/Resorts/Cruise lines",
+      "root_id": "7",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Recreational Products",
+      "root_id": "163",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Casinos/Gaming",
+      "root_id": "163",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Personnel Services",
+      "root_id": "947",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Advertising/Marketing Services",
+      "root_id": "947",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Major Telecommunications",
+      "root_id": "81",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Wireless Telecommunications",
+      "root_id": "81",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Specialty Telecommunications",
+      "root_id": "81",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Telecommunications Equipment",
+      "root_id": "81",
+      "method": "provider_industry_crosswalk"
+    },
+    {
+      "provider_industry": "Agricultural Commodities/Milling",
+      "root_id": "615",
+      "method": "provider_industry_crosswalk"
+    }
+  ]
+}

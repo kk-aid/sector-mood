@@ -30,7 +30,7 @@ class JpxTests(unittest.TestCase):
 
     def test_japan_keeps_provider_despite_jpx_cache(self):
         rows=parse_frame(self.rows())
-        with patch('pipeline.jpx_classify.lookup',side_effect=lambda c:rows.get(normalize(c))):
+        with patch('pipeline.jpx_classify.lookup',side_effect=lambda c:rows.get(normalize(c))), patch('pipeline.japan_classify.classify',return_value=None):
             p=profile({'name':'8035','sector':'Electronic Technology','industry':'Semiconductors'},'jp')
         self.assertEqual(p['source'],'provider')
         self.assertEqual(p['provider_industry'],p['industry'])

@@ -167,7 +167,7 @@ def build_message(mkt: str, day, ath: list[dict], w52: list[dict], labels: dict,
     cond = f"상승률 상위 {c['top_n']} · " if c.get("top_n") else ""
     lines = [f"{m['flag']} <b>{m['label']} 신고가 · {day:%Y.%m.%d}({WD[day.weekday()]})</b>",
              f"{cond}상승·양봉 마감 · 장중 신고가",
-             ("기존 공급자 업종 기준 · [소형주]는 규모 태그" if mkt == "jp" else "토스 업종 기준 · 복수 소속은 각 업종에 포함 · [소형주]는 규모 태그")]
+             ("공통 대분류 매핑 · 세부는 기존 업종·공시/IR 검토 · [소형주]는 규모 태그" if mkt == "jp" else "토스 업종 기준 · 복수 소속은 각 업종에 포함 · [소형주]는 규모 태그")]
     clusters = (extra or {}).get("clusters") or []
     today_cl = [cl for cl in clusters if cl["n"] >= 2]
     if today_cl:

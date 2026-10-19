@@ -104,15 +104,18 @@ class Engine:
         reviewed = reviewed_rows()
         if use_toss is None:
             use_toss = mkt in ('kr','us') and not all(u.get('_synthetic') for u in universe)
+        self.use_japan = mkt == "jp" and not all(u.get("_synthetic") for u in universe)
         self.use_toss = use_toss
+        self.business_profiles = {}
         self.classification_counts = {}
         self.sector_memberships, self.industry_memberships = {}, {}
         self.sector_names, self.ind_name, self.ind_sector = {}, {}, {}
         for ticker in self.meta.index:
             row = self.meta.loc[ticker]
             p = profile({'name': ticker, 'industry': row['industry_en'], 'sector': row['sector']},
-                        mkt, reviewed=reviewed) if use_toss else {'source':'provider'}
+                        mkt, reviewed=reviewed) if (use_toss or self.use_japan) else {'source':'provider'}
             source = p['source']
+            if source == 'jp_reviewed': self.business_profiles[ticker] = p
             if use_toss and source == 'provider':
                 source = 'unmapped'
             self.classification_counts[source] = self.classification_counts.get(source, 0) + 1
@@ -128,6 +131,14 @@ class Engine:
                     self.ind_name[ik] = path[-1]['name']
                     self.ind_sector[ik] = sk
                 self.meta.at[ticker,'industry'] = ' / '.join(dict.fromkeys(self.ind_name[k] for k in industries))
+            elif source in ('jp_mapped','jp_reviewed'):
+                path=p['common_path']
+                sk='toss:'+str(path[0]['id'])
+                ik=('toss:'+'/'.join(str(n['id']) for n in path)) if len(path)>1 else 'jp:provider:'+sk+':'+str(row['industry_en'])
+                sectors,industries=[sk],[ik]
+                self.sector_names[sk]=p['sector']
+                self.ind_name[ik],self.ind_sector[ik]=p['industry'],sk
+                self.meta.at[ticker,'industry']=p.get('subindustry') or p['industry']
             elif source == 'reviewed':
                 sk = 'reviewed:' + p['sector']
                 ik = sk + ':' + p['industry'] + ':' + str(p.get('subindustry') or '')
@@ -343,6 +354,7 @@ class Engine:
                 iidx.get(self.meta.at[t, "industry_en"], -1),
                 [sidx[k] for k in self.sector_memberships[t]],
                 [iidx[k] for k in self.industry_memberships[t] if k in iidx],
+                self.business_profiles.get(t),
             ])
 
         return {
@@ -361,7 +373,7 @@ class Engine:
             "industries": industries,
             "stocks": {
                 "cols": ["ticker", "name", "sector", "industry", "days", "week",
-                         "upshare", "share", "valx", "mcap", "dmcap", "ind", "sector_ids", "industry_ids"],
+                         "upshare", "share", "valx", "mcap", "dmcap", "ind", "sector_ids", "industry_ids", "business_classification"],
                 "sectors": self.sectors,
                 "rows": rows,
             },
@@ -419,7 +431,7 @@ def write_outputs(engine: Engine, universe_label: str, n_weeks: int):
         "currency": mk["currency"],
         "market": engine.mkt, "label": mk["label"], "flag": mk["flag"],
         "classification_fingerprint": fingerprint,
-        "classification": {"sector": "토스 대분류" if engine.use_toss else "공급자 분류", "industry": "토스 전체 소속, 미등록 별도" if engine.use_toss else "공급자 분류",
+        "classification": {"sector": "토스 대분류" if engine.use_toss else "토스 공통 대분류 매핑" if engine.use_japan else "공급자 분류", "industry": "토스 전체 소속, 미등록 별도" if engine.use_toss else "기존 업종 + 공시·IR 세부 검토" if engine.use_japan else "공급자 분류",
                            "counts": engine.classification_counts, "basis": "현재 분류 기준 재집계", "overlap": engine.use_toss},
     }
     (out / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1))

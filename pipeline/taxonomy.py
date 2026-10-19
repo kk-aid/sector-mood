@@ -63,7 +63,13 @@ def profile(row, market, legacy=None, reviewed=None, asset="stock"):
     out.update(toss_memberships=(membership or {}).get('memberships', []), toss_asof=asof)
     out['provider_sector'] = sector
     out['provider_industry'] = industry
-    if membership:
+    japanese = None
+    if market == 'jp' and asset == 'stock':
+        from .japan_classify import classify
+        japanese = classify(row)
+    if japanese:
+        out.update(japanese)
+    elif membership:
         paths = membership.get('memberships', [])
         roots = list(dict.fromkeys(p[0]['name'] for p in paths if p))
         industries = list(dict.fromkeys(p[min(1,len(p)-1)]['name'] for p in paths if p))
@@ -94,6 +100,8 @@ def profile(row, market, legacy=None, reviewed=None, asset="stock"):
 
 def labels_from_profile(p):
     """All Toss branches; each stock occurs once per branch, never per ancestor."""
+    if p['source'] in ('jp_mapped','jp_reviewed'):
+        return [p['sector'] + ' › ' + p['industry']]
     if p['source'] == 'toss':
         return list(dict.fromkeys(' › '.join(x['name'] for x in path[:2])
                                  for path in p.get('toss_memberships', []) if path))
