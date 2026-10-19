@@ -28,7 +28,7 @@
   "2026-10-12",
   "2026-10-19"
  ],
- "generated": "2026-10-19 21:05 KST",
+ "generated": "2026-10-19 21:25 KST",
  "last_day": "2026-10-19",
  "universe": "2026-10",
  "n_stocks": 644,
@@ -46,6 +46,7 @@
    "unmapped": 11
   },
   "basis": "현재 분류 기준 재집계",
-  "overlap": true
+  "overlap": true,
+  "asof": null
  }
 }
