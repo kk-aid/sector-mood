@@ -12,8 +12,8 @@ const WD = ["월","화","수","목","금"];
 const DSTATE = {"2":"완전 정배열","1":"정배열 진행","0":"혼조","-1":"역배열 진행","-2":"완전 역배열"};
 const DCLS = {"2":"st2","1":"st1","0":"st0","-1":"stm1","-2":"stm2"};
 const DESC = {
-  map: "한국·미국은 토스 대분류·세부업종 기준. 복수 소속은 각 업종에 포함하며 시장 전체는 종목당 한 번 계산함. 업종별 종목 수·거래 몫은 합산하지 않음. 일본은 기존 분류. 현재 분류 기준으로 과거도 재집계함. 거래와 등락을 함께 본 그날의 업종 심리. 상대 등락은 시장 대비 %p, 상대 거래는 업종의 직전 20거래일 평균 대비 배수를 시장 배수로 나눈 값. 섹터 이름 앞 ▸ 를 누르면 산업이 펼쳐지고, 칸을 누르면 종목이 열림.",
-  cross: "한·미는 토스, 일본은 기존 분류이므로 매핑되지 않은 업종은 별도 행으로 표시함. 같은 업종을 미국·한국·일본에서 같은 주에 나란히 놓은 것. 세 시장이 같은 방향으로 기준을 넘으면 '공통', 반대로 넘으면 '엇갈림'. 각 칸은 해당 시장 안에서의 시장 대비 판정임.",
+  map: "한국·미국은 토스 대분류·세부업종 기준. 복수 소속은 각 업종에 포함하며 시장 전체는 종목당 한 번 계산함. 업종별 종목 수·거래 몫은 합산하지 않음. 일본은 JPX 17개 대분류·33개 업종 기준. 현재 분류 기준으로 과거도 재집계함. 거래와 등락을 함께 본 그날의 업종 심리. 상대 등락은 시장 대비 %p, 상대 거래는 업종의 직전 20거래일 평균 대비 배수를 시장 배수로 나눈 값. 섹터 이름 앞 ▸ 를 누르면 산업이 펼쳐지고, 칸을 누르면 종목이 열림.",
+  cross: "한·미는 토스, 일본은 JPX 분류이므로 매핑되지 않은 업종은 별도 행으로 표시함. 같은 업종을 미국·한국·일본에서 같은 주에 나란히 놓은 것. 세 시장이 같은 방향으로 기준을 넘으면 '공통', 반대로 넘으면 '엇갈림'. 각 칸은 해당 시장 안에서의 시장 대비 판정임.",
   rrg: "가로 = RS 추세(시장 대비 강도 ÷ 최근 10주 평균, 100 위면 평균보다 강함), 세로 = RS 모멘텀(RS 추세의 4주 변화, 100 위면 개선 중). 보통 개선 → 선도 → 약화 → 소외 순으로 시계 방향으로 돈다.",
   streak: "업종별 최근 12주 주간 판정 띠. 같은 판정이 이어지는 주 수(연속)를 보면 일회성 반짝인지 지속되는 흐름인지 구분할 수 있음.",
   trend: "종목별 이평 배열(일봉 5·20·60·120·200, 주봉 10·20·30·40), Weinstein Stage(30주선), Minervini 트렌드 템플릿 8조건과 업종 breadth(이평선 위 비율, 52주 신고가·신저가). 최신 거래일 기준 스냅샷.",
@@ -142,7 +142,7 @@ async function openMarket(key, week){
   $("#meta").textContent = `최근 거래일 ${INDEX.last_day} · 유니버스 ${INDEX.universe} (시총 ${moneyFmt(INDEX.min_mcap/1e8, INDEX.currency||"달러")} 이상 → ${INDEX.n_stocks.toLocaleString()}종목, 월 1회 고정) · 갱신 ${INDEX.generated}`;
   if(INDEX.classification){
     const c = INDEX.classification.counts || {};
-    $("#meta").textContent += ` · 세부업종 토스 ${c.toss||0} / 검토 승인 ${c.reviewed||0} / 토스 미등록 ${c.unmapped||0} / 기존 분류 ${(c.provider||0)+(c.unknown||0)} · 현재 분류 기준 재집계`;
+    $("#meta").textContent += INDEX.classification.sector === "JPX 17업종" ? ` · JPX 17·33업종 ${c.jpx||0} (기준 ${INDEX.classification.asof||"미확인"}) / 상장 상품 ${c.jpx_product||0} / JPX 미등록 ${c.jpx_unmapped||0} · 현재 분류 기준 재집계` : ` · 세부업종 토스 ${c.toss||0} / 검토 승인 ${c.reviewed||0} / 토스 미등록 ${c.unmapped||0} / 기존 분류 ${(c.provider||0)+(c.unknown||0)} · 현재 분류 기준 재집계`;
   }
   $("#week").innerHTML = INDEX.weeks.slice().reverse().map(w => `<option value="${w}">${md(w)}(월) 주</option>`).join("");
   await openWeek(INDEX.weeks.includes(week) ? week : INDEX.weeks[INDEX.weeks.length-1]);
@@ -973,7 +973,7 @@ const KIND = {ATH:"역대", "52W":"52주"};
 function nhClassification(st){
   const c = st.classification;
   if(!c) return esc(st.industry||"");
-  const source = {toss:"토스", reviewed:"검토 승인", provider:"기존 공급자", unknown:"미분류", unmapped:"토스 미등록"}[c.source] || "기존 공급자";
+  const source = {jpx:"JPX 공식", jpx_product:"JPX 상품 구분", jpx_unmapped:"JPX 미등록", toss:"토스", reviewed:"검토 승인", provider:"기존 공급자", unknown:"미분류", unmapped:"토스 미등록"}[c.source] || "기존 공급자";
   const path = [...new Set([c.sector,c.industry,c.subindustry].filter(x=>x && x!=="미분류"))];
   const memberships = (c.toss_memberships||[]).map(p=>p.map(x=>x.name).join(" › "));
   return `<span>${esc(c.source==="toss" && memberships.length>1 ? "복수 소속" : path.join(" › ") || st.label)} · ${esc(source)}</span>` +

@@ -104,6 +104,7 @@ class Engine:
         reviewed = reviewed_rows()
         if use_toss is None:
             use_toss = mkt in ('kr','us') and not all(u.get('_synthetic') for u in universe)
+        self.use_jpx = mkt == "jp" and not all(u.get("_synthetic") for u in universe)
         self.use_toss = use_toss
         self.classification_counts = {}
         self.sector_memberships, self.industry_memberships = {}, {}
@@ -111,7 +112,7 @@ class Engine:
         for ticker in self.meta.index:
             row = self.meta.loc[ticker]
             p = profile({'name': ticker, 'industry': row['industry_en'], 'sector': row['sector']},
-                        mkt, reviewed=reviewed) if use_toss else {'source':'provider'}
+                        mkt, reviewed=reviewed) if (use_toss or self.use_jpx) else {'source':'provider'}
             source = p['source']
             if use_toss and source == 'provider':
                 source = 'unmapped'
@@ -128,6 +129,14 @@ class Engine:
                     self.ind_name[ik] = path[-1]['name']
                     self.ind_sector[ik] = sk
                 self.meta.at[ticker,'industry'] = ' / '.join(dict.fromkeys(self.ind_name[k] for k in industries))
+            elif source in ('jpx','jpx_product','jpx_unmapped'):
+                j = p.get('jpx', {})
+                sk = 'jpx:' + j.get('sector_code', source)
+                ik = 'jpx:' + j.get('industry_code', source + ':' + p['industry'])
+                sectors, industries = [sk], [ik]
+                self.sector_names[sk] = p['sector']
+                self.ind_name[ik], self.ind_sector[ik] = p['industry'], sk
+                self.meta.at[ticker,'industry'] = p['industry']
             elif source == 'reviewed':
                 sk = 'reviewed:' + p['sector']
                 ik = sk + ':' + p['industry'] + ':' + str(p.get('subindustry') or '')
@@ -409,6 +418,7 @@ def write_outputs(engine: Engine, universe_label: str, n_weeks: int):
         print(f"[compute] {p.name}: {len(data['days'])}일, 산업 {len(data['industries'])}개, {len(data['stocks']['rows'])}종목")
 
     files = sorted((out / "weeks").glob("*.json"))
+    from .jpx_classify import document as jpx_document
     index = {
         "weeks": [f.stem for f in files],
         "generated": datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d %H:%M KST"),
@@ -419,8 +429,8 @@ def write_outputs(engine: Engine, universe_label: str, n_weeks: int):
         "currency": mk["currency"],
         "market": engine.mkt, "label": mk["label"], "flag": mk["flag"],
         "classification_fingerprint": fingerprint,
-        "classification": {"sector": "토스 대분류" if engine.use_toss else "공급자 분류", "industry": "토스 전체 소속, 미등록 별도" if engine.use_toss else "공급자 분류",
-                           "counts": engine.classification_counts, "basis": "현재 분류 기준 재집계", "overlap": engine.use_toss},
+        "classification": {"sector": "토스 대분류" if engine.use_toss else "JPX 17업종" if engine.use_jpx else "공급자 분류", "industry": "토스 전체 소속, 미등록 별도" if engine.use_toss else "JPX 33업종, 미등록 별도" if engine.use_jpx else "공급자 분류",
+                           "counts": engine.classification_counts, "basis": "현재 분류 기준 재집계", "overlap": engine.use_toss, "asof": jpx_document().get("asof") if engine.use_jpx else None},
     }
     (out / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1))
     if engine.mkt == "us":

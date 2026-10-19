@@ -25,7 +25,7 @@ def refresh(market):
                    'market_cap_basic': None if stock.get('mcap') is None else stock['mcap'] * 1e8}
             p = profile(row, market, reviewed=reviewed)
             stock.setdefault('provider_label', stock['label'])
-            if p['source'] in ('toss', 'reviewed', 'unmapped'):
+            if p['source'] in ('toss', 'reviewed', 'unmapped', 'jpx', 'jpx_product', 'jpx_unmapped'):
                 stock['label'] = p['industry']
             else:
                 stock['label'] = p['industry'] if stock.get('industry') else stock['provider_label']
@@ -41,7 +41,7 @@ def refresh(market):
         for row in rows:
             code = row['code']
             p = profile({'name': code}, market, reviewed=reviewed)
-            row['label'] = p['industry'] if p['source'] in ('toss', 'reviewed', 'unmapped') else known.get(code, row['label'])
+            row['label'] = p['industry'] if p['source'] in ('toss', 'reviewed', 'unmapped', 'jpx', 'jpx_product', 'jpx_unmapped') else known.get(code, row['label'])
             row['labels'] = json.dumps(labels_from_profile(p), ensure_ascii=False)
         with path.open('w', encoding='utf-8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=list(dict.fromkeys(fields + ['labels'])))
@@ -70,7 +70,7 @@ def refresh(market):
             page[f'cum{w}'] = {k: len(v) for k, v in cum[w].items()}
         for row in page.get('follow', []):
             p = profile({'name': row['code']}, market, reviewed=reviewed)
-            if p['source'] in ('toss', 'reviewed', 'unmapped'):
+            if p['source'] in ('toss', 'reviewed', 'unmapped', 'jpx', 'jpx_product', 'jpx_unmapped'):
                 row['label'] = p['industry']
             else:
                 row['label'] = known.get(row['code'], row['label'])
@@ -95,6 +95,16 @@ def refresh(market):
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--market', choices=['jp'])
+    args = parser.parse_args()
+    if args.market == 'jp':
+        from .jpx_classify import document
+        if not document().get('securities'):
+            raise SystemExit('JPX cache required; no files changed')
+        refresh('jp')
+        return
     markets, asof = toss_rows()
     if not markets:
         raise SystemExit('Fresh, complete Toss cache required; no files changed')
