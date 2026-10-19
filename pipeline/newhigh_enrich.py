@@ -423,7 +423,7 @@ def run(mkt: str, day: date, ath: list[dict], w52: list[dict], label_of, display
     # 군집·누적
     past = [r for r in read_records(mkt) if r["date"] != today]
     now = [{"date": today, "code": c, "label": l} for c, l in lab.items()]
-    cum = cumulative(past + now, today)
+    cum = cumulative([r for r in past if r.get("classification_version") == "business-v1"] + now, today)
     clusters = []
     for l, rs in by_label.items():
         n5, n20 = len(cum[5].get(l, ())), len(cum[20].get(l, ()))
@@ -589,6 +589,9 @@ def _write_site(mkt, day, hits, lab, rowmap, prices, news, filings, clusters, cu
     base.mkdir(parents=True, exist_ok=True)
     today = day.isoformat()
     stocks = []
+    from .taxonomy import profile, reviewed_rows
+    from .newhigh import load_labels
+    reviewed, legacy = reviewed_rows(), load_labels()
     for kind, r in hits:
         c = str(r.get("name"))
         df = prices.get(c)
@@ -597,6 +600,7 @@ def _write_site(mkt, day, hits, lab, rowmap, prices, news, filings, clusters, cu
             "change": round(r["change"], 2), "rank": r.get("rank"), "close": r.get("close"),
             "mcap": None if r.get("market_cap_basic") is None else round(r["market_cap_basic"] / 1e8),
             "industry": r.get("industry"), "exchange": r.get("exchange"),
+            "classification": profile(r, mkt, legacy, reviewed),
             "chart": series_for_site(df) if df is not None and len(df) >= 30 else None,
             "news": news.get(c, []), "filings": filings.get(c, []),
         })

@@ -11,7 +11,7 @@
   3. 장중 신고가: 당일 고가 ≥ 역대 최고가(High.All) / 52주 최고가(price_52_week_high)
      TradingView 고가는 분할·무상증자 반영 기준이라 증자 후 신고가가 빠지지 않음.
 
-섹터 라벨 우선순위: data/newhigh/labels.csv → 소형주 묶음 → FactSet 산업 한국어 → 미분류
+섹터 라벨 우선순위: 근거·확인일이 있는 taxonomy.csv 승인 업종 → FactSet 산업 한국어 → 미분류 (규모·기존 테마 별도)
 휴장일에는 직전 거래일 데이터가 그대로 오므로, 직전 실행과 결과가 같으면 전송·기록을 건너뜀.
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ from .universe import HEADERS, SUBTYPE_BLOCK
 
 WD = "월화수목금토일"
 COLUMNS = ["name", "description", "close", "open", "high", "change", "market_cap_basic",
-           "Value.Traded", "High.All", "price_52_week_high", "industry", "exchange", "type", "subtype"]
+           "Value.Traded", "High.All", "price_52_week_high", "industry", "exchange", "type", "subtype", "sector"]
 
 
 # ── 수집 ────────────────────────────────────────────────
@@ -115,15 +115,9 @@ def load_labels() -> dict[tuple[str, str], str]:
 
 
 def label_of(r: dict, mkt: str, labels: dict) -> str:
-    code = str(r.get("name") or "")
-    if (mkt, code) in labels:
-        return labels[(mkt, code)]
-    c = config.NEWHIGH[mkt]
-    mcap = r.get("market_cap_basic")
-    if c["small_cap"] and mcap is not None and mcap < c["small_cap"]:
-        return c["small_label"]
-    ind = r.get("industry") or ""
-    return config.INDUSTRY_KO.get(ind, ind) or "미분류"
+    from .taxonomy import profile
+    return profile(r, mkt, labels)['industry']
+
 
 
 _SUFFIX = ("보통주", " Co., Ltd.", ",Ltd.", " Corporation", " Holdings", " Inc.", " Corp.", " Ltd.")
@@ -140,6 +134,11 @@ def display_name(r: dict, mkt: str) -> str:
 
 
 # ── 메시지 ──────────────────────────────────────────────
+def size_tag(r, mkt):
+    cap, limit = r.get('market_cap_basic'), config.NEWHIGH[mkt]['small_cap']
+    return ' [소형주]' if limit and cap is not None and cap < limit else ''
+
+
 def _section(title: str, items: list[dict], mkt: str, labels: dict, note: str = "",
              notes: dict | None = None, used: set | None = None) -> list[str]:
     e = html.escape
@@ -149,7 +148,7 @@ def _section(title: str, items: list[dict], mkt: str, labels: dict, note: str = 
     order = sorted(groups, key=lambda k: -max(x["change"] for x in groups[k]))
     out = [f"<b>{title} {len(items)}</b>{note}"]
     for k in order:
-        names = ", ".join(f"{e(display_name(x, mkt))} {x['change']:+.1f}%"
+        names = ", ".join(f"{e(display_name(x, mkt))} {x['change']:+.1f}%{size_tag(x, mkt)}"
                           for x in sorted(groups[k], key=lambda x: -x["change"]))
         out.append(f"({e(k)}) {names}")
         if notes and k in notes and used is not None and k not in used:   # 군집 재료는 처음 나올 때 한 번만
@@ -165,7 +164,8 @@ def build_message(mkt: str, day, ath: list[dict], w52: list[dict], labels: dict,
     e = html.escape
     cond = f"상승률 상위 {c['top_n']} · " if c.get("top_n") else ""
     lines = [f"{m['flag']} <b>{m['label']} 신고가 · {day:%Y.%m.%d}({WD[day.weekday()]})</b>",
-             f"{cond}상승·양봉 마감 · 장중 신고가"]
+             f"{cond}상승·양봉 마감 · 장중 신고가",
+             "업종 기준 묶음 · [소형주]는 규모 태그"]
     clusters = (extra or {}).get("clusters") or []
     today_cl = [cl for cl in clusters if cl["n"] >= 2]
     if today_cl:
@@ -217,14 +217,15 @@ def record(mkt: str, day, ath: list[dict], w52: list[dict], labels: dict, sig: s
     d = config.NEWHIGH_ROOT / mkt
     d.mkdir(parents=True, exist_ok=True)
     path = d / f"{day:%Y-%m}.csv"
-    cols = ["date", "kind", "rank", "code", "name", "label", "change", "close", "mcap"]
+    cols = ["date", "kind", "rank", "code", "name", "label", "change", "close", "mcap", "classification_version"]
     old = []
     if path.exists():
         with path.open(encoding="utf-8") as f:
             old = [r for r in csv.DictReader(f) if r["date"] != day.isoformat()]
     new = [{"date": day.isoformat(), "kind": kind, "rank": r["rank"], "code": r.get("name"),
             "name": display_name(r, mkt), "label": label_of(r, mkt, labels),
-            "change": round(r["change"], 2), "close": r.get("close"), "mcap": r.get("market_cap_basic")}
+            "change": round(r["change"], 2), "close": r.get("close"), "mcap": r.get("market_cap_basic"),
+            "classification_version": "business-v1"}
            for kind, rows in (("ATH", ath), ("52W", w52)) for r in rows]
     with path.open("w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=cols)
