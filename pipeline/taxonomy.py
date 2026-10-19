@@ -6,6 +6,7 @@ DART candidates are never automatically promoted by this module.
 from __future__ import annotations
 import csv
 import json
+from functools import lru_cache
 from datetime import datetime, timezone
 from pathlib import Path
 from . import config
@@ -25,12 +26,18 @@ def reviewed_rows(path: Path | None = None):
             and r.get('reviewed_on')}
 
 
+@lru_cache(maxsize=2)
+def _toss_document(path, modified, size):
+    return json.loads(Path(path).read_text(encoding='utf-8'))
+
+
 def toss_rows():
     path = config.NEWHIGH_ROOT / 'toss' / 'labels.json'
     if not path.exists():
         return {}, None
     try:
-        d = json.loads(path.read_text())
+        stat = path.stat()
+        d = _toss_document(str(path), stat.st_mtime_ns, stat.st_size)
         asof = datetime.fromisoformat(d['asof'])
         age = (datetime.now(timezone.utc) - asof).total_seconds()
         if d.get('partial') or age < 0 or age > 14 * 86400:

@@ -12,7 +12,7 @@ const WD = ["월","화","수","목","금"];
 const DSTATE = {"2":"완전 정배열","1":"정배열 진행","0":"혼조","-1":"역배열 진행","-2":"완전 역배열"};
 const DCLS = {"2":"st2","1":"st1","0":"st0","-1":"stm1","-2":"stm2"};
 const DESC = {
-  map: "거래와 등락을 함께 본 그날의 업종 심리. 상대 등락은 시장 대비 %p, 상대 거래는 업종의 직전 20거래일 평균 대비 배수를 시장 배수로 나눈 값. 섹터 이름 앞 ▸ 를 누르면 산업이 펼쳐지고, 칸을 누르면 종목이 열림.",
+  map: "대분류는 국가 공통 공급자 기준, 세부업종은 토스·검토 승인 우선(복수 분류는 기존 업종). 현재 분류 기준으로 과거도 재집계함. 거래와 등락을 함께 본 그날의 업종 심리. 상대 등락은 시장 대비 %p, 상대 거래는 업종의 직전 20거래일 평균 대비 배수를 시장 배수로 나눈 값. 섹터 이름 앞 ▸ 를 누르면 산업이 펼쳐지고, 칸을 누르면 종목이 열림.",
   cross: "같은 업종을 미국·한국·일본에서 같은 주에 나란히 놓은 것. 세 시장이 같은 방향으로 기준을 넘으면 '공통', 반대로 넘으면 '엇갈림'. 각 칸은 해당 시장 안에서의 시장 대비 판정임.",
   rrg: "가로 = RS 추세(시장 대비 강도 ÷ 최근 10주 평균, 100 위면 평균보다 강함), 세로 = RS 모멘텀(RS 추세의 4주 변화, 100 위면 개선 중). 보통 개선 → 선도 → 약화 → 소외 순으로 시계 방향으로 돈다.",
   streak: "업종별 최근 12주 주간 판정 띠. 같은 판정이 이어지는 주 수(연속)를 보면 일회성 반짝인지 지속되는 흐름인지 구분할 수 있음.",
@@ -140,6 +140,10 @@ async function openMarket(key, week){
   $("#mtag").textContent = INDEX.label || "미국";
   document.title = `업종 심리 지도 · ${INDEX.label || "미국"}`;
   $("#meta").textContent = `최근 거래일 ${INDEX.last_day} · 유니버스 ${INDEX.universe} (시총 ${moneyFmt(INDEX.min_mcap/1e8, INDEX.currency||"달러")} 이상 → ${INDEX.n_stocks.toLocaleString()}종목, 월 1회 고정) · 갱신 ${INDEX.generated}`;
+  if(INDEX.classification){
+    const c = INDEX.classification.counts || {};
+    $("#meta").textContent += ` · 세부업종 토스 ${c.toss||0} / 검토 승인 ${c.reviewed||0} / 기존 분류 ${(c.provider||0)+(c.unknown||0)} · 현재 분류 기준 재집계`;
+  }
   $("#week").innerHTML = INDEX.weeks.slice().reverse().map(w => `<option value="${w}">${md(w)}(월) 주</option>`).join("");
   await openWeek(INDEX.weeks.includes(week) ? week : INDEX.weeks[INDEX.weeks.length-1]);
 }
@@ -966,6 +970,16 @@ const SHORTM = {us:"미", jp:"일", kr:"한"};
 
 /* ══ 8. 신고가 ═════════════════════════════ */
 const KIND = {ATH:"역대", "52W":"52주"};
+function nhClassification(st){
+  const c = st.classification;
+  if(!c) return esc(st.industry||"");
+  const source = {toss:"토스", reviewed:"검토 승인", provider:"기존 공급자", unknown:"미분류"}[c.source] || "기존 공급자";
+  const path = [c.sector,c.industry,c.subindustry].filter(x=>x && x!=="미분류");
+  const memberships = (c.toss_memberships||[]).map(p=>p.map(x=>x.name).join(" › "));
+  return `<span>${esc(path.join(" › ") || st.label)} · ${esc(source)}</span>` +
+    (memberships.length ? `<div style="margin-top:4px;color:var(--ink3)">토스 소속: ${memberships.map(esc).join(" / ")}${c.toss_ambiguous?" · 복수 분류, 기본 업종으로 집계":""}</div>` : "");
+}
+
 function nhLinks(st){
   const c = encodeURIComponent(st.code), ex = st.exchange ? `${st.exchange}:` : "";
   const tv = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(ex+st.code)}`;
@@ -1074,7 +1088,7 @@ async function renderNewhigh(){
       const mat = nhMat(st.filings, "f") + nhMat(st.news, "n");
       h += `<div class="nhcard"><div class="nhh"><div><b>${esc(st.name)}</b> <small class="mono">${esc(st.code)}</small></div>
           <div class="mono"><span class="pos"><b>${fmt(st.change)}%</b></span> <span class="badge${st.kind==="ATH"?" up":""}">${KIND[st.kind]}</span></div></div>
-        <div class="nhm">${esc(st.industry||"")} · 시총 ${moneyFmt(st.mcap, cur)}${st.rank?` · 상승률 ${st.rank}위`:""}</div>
+        <div class="nhm">${nhClassification(st)} · 시총 ${moneyFmt(st.mcap, cur)}${st.rank?` · 상승률 ${st.rank}위`:""}</div>
         ${nhChart(st.chart)}
         <div class="nhl">${nhLinks(st)}</div>
         ${mat ? `<ul class="nhmat">${mat}</ul>` : `<div class="nhmat-none">최근 공시·뉴스 없음</div>`}</div>`;

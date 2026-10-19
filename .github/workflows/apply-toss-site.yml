@@ -1,0 +1,63 @@
+name: apply-toss-to-site
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-toss-site.yml'
+      - 'pipeline/refresh_classification.py'
+      - 'pipeline/taxonomy.py'
+      - 'pipeline/compute.py'
+  workflow_run:
+    workflows: [toss-sector-sync]
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: sector-mood
+  cancel-in-progress: false
+jobs:
+  refresh:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Verify classification integration
+        run: |
+          python -m unittest tests.test_site_classification tests.test_taxonomy tests.test_toss_classify
+          python -m tests.test_compute
+          python -m tests.test_analytics
+          node --check docs/app.js
+      - name: Refresh stored new-high pages without sending messages
+        run: python -m pipeline.refresh_classification
+      - name: Publish new-high classification
+        run: |
+          git config user.name sector-mood-bot
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data data/newhigh/kr data/newhigh/us
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "data: apply Toss classifications to stored new-high pages"
+          git pull --rebase --autostash
+          git push
+      - name: Recompute industry maps and analytics
+        run: |
+          python -m pipeline.run --market kr --weeks 2
+          python -m pipeline.run --market us --weeks 2
+      - name: Publish map classification
+        if: always()
+        run: |
+          git config user.name sector-mood-bot
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "data: recompute industry maps with current classifications"
+          git pull --rebase --autostash
+          git push

@@ -88,6 +88,21 @@ class Engine:
         # 화면 표시용 산업명: FactSet 영문 → 한국어 (config.INDUSTRY_KO, 없으면 원래 값)
         ko = getattr(config, "INDUSTRY_KO", {})
         self.meta["industry"] = [ko.get(en, ind) for en, ind in zip(self.meta["industry_en"], self.meta["industry"])]
+        # Common sectors remain comparable across countries; industry uses a
+        # unique Toss branch when available. Keep ambiguous branches as metadata.
+        from .taxonomy import profile, reviewed_rows
+        reviewed = reviewed_rows()
+        self.classification_counts = {}
+        for ticker in self.meta.index:
+            row = self.meta.loc[ticker]
+            p = profile({'name': ticker, 'industry': row['industry_en'],
+                         'sector': row['sector']}, mkt, reviewed=reviewed)
+            source = p['source']
+            self.classification_counts[source] = self.classification_counts.get(source, 0) + 1
+            if source in ('toss', 'reviewed'):
+                label = p.get('subindustry') or p['industry']
+                self.meta.at[ticker, 'industry'] = label
+                self.meta.at[ticker, 'industry_en'] = f"{source}:{row['sector']}:{p['industry']}:{label}"
         if mkt == "kr":                                   # '유한양행보통주' → '유한양행'
             self.meta["name"] = self.meta["name"].astype(str).str.replace(r"\s*보통주$", "", regex=True)
         self.A, self.C, self.V = A[cols], C[cols], V[cols].fillna(0)
@@ -334,6 +349,13 @@ def write_outputs(engine: Engine, universe_label: str, n_weeks: int):
     out = config.DATA_ROOT / engine.mkt
     (out / "weeks").mkdir(parents=True, exist_ok=True)
     weeks = engine.week_keys()
+    import hashlib
+    mapping = engine.meta[['sector', 'industry_en', 'industry']].sort_index().to_json(force_ascii=False)
+    fingerprint = hashlib.sha256(mapping.encode('utf-8')).hexdigest()
+    previous = out / 'index.json'
+    old = json.loads(previous.read_text(encoding='utf-8')) if previous.exists() else {}
+    if old.get('classification_fingerprint') != fingerprint:
+        n_weeks = max(n_weeks, len(list((out / 'weeks').glob('*.json'))))
     for m in weeks[-n_weeks:]:
         data = engine.build_week(m, universe_label)
         p = out / "weeks" / f"{data['week']}.json"
@@ -350,6 +372,9 @@ def write_outputs(engine: Engine, universe_label: str, n_weeks: int):
         "min_mcap": mk["min_mcap"],
         "currency": mk["currency"],
         "market": engine.mkt, "label": mk["label"], "flag": mk["flag"],
+        "classification_fingerprint": fingerprint,
+        "classification": {"sector": "공통 공급자 분류", "industry": "토스·검토 승인 우선, 나머지 공급자 분류",
+                           "counts": engine.classification_counts, "basis": "현재 분류 기준 재집계"},
     }
     (out / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1))
     if engine.mkt == "us":
