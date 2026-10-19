@@ -9,13 +9,19 @@ from pipeline import taxonomy as T, dart_classify as D
 
 
 class TaxonomyTests(unittest.TestCase):
+    def setUp(self):
+        cache = patch.object(T, 'toss_rows', return_value=({}, None))
+        cache.start()
+        self.addCleanup(cache.stop)
+
     def test_size_and_themes_never_replace_business(self):
         r={'name':'007660','industry':'Electronic Components','sector':'Electronic Technology','market_cap_basic':1e9}
         p=T.profile(r,'kr',{('kr','007660'):'HBM'},reviewed={})
-        self.assertEqual(p['industry'],'전자부품')
+        self.assertEqual(p['industry'],'토스 미등록')
+        self.assertEqual(p['provider_industry'],'전자부품')
         self.assertEqual(p['size'],'소형주')
         self.assertEqual(p['legacy_group'],'HBM')
-        self.assertEqual(p['sector'],'전자 기술')
+        self.assertEqual(p['provider_sector'],'전자 기술')
 
     def test_only_evidenced_approved_rows_override(self):
         with tempfile.TemporaryDirectory() as tmp:

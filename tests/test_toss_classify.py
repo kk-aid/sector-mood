@@ -59,9 +59,10 @@ class TossTests(unittest.TestCase):
             x=taxonomy.profile(row,'kr',reviewed={})
             self.assertEqual(x['source'],'toss');self.assertEqual(x['subindustry'],'메모리')
             manual={('kr','005930'):{'industry':'복합 반도체','source_url':'https://dart.fss.or.kr','reviewed_on':'2026-10-19'}}
-            self.assertEqual(taxonomy.profile(row,'kr',reviewed=manual)['source'],'reviewed')
+            self.assertEqual(taxonomy.profile(row,'kr',reviewed=manual)['source'],'toss')
+            self.assertIn('reviewed_business',taxonomy.profile(row,'kr',reviewed=manual))
             doc['asof']=(datetime.now(timezone.utc)-timedelta(days=15)).isoformat();p.write_text(json.dumps(doc))
-            self.assertEqual(taxonomy.profile(row,'kr',reviewed={})['source'],'provider')
+            self.assertEqual(taxonomy.profile(row,'kr',reviewed={})['source'],'unmapped')
 
     def test_failure_preserves_previous_cache_and_dryrun_never_writes(self):
         with tempfile.TemporaryDirectory() as tmp,patch.object(config,'NEWHIGH_ROOT',Path(tmp)),patch.dict('os.environ',{'TOSS_CLIENT_ID':'id','TOSS_CLIENT_SECRET':'secret'}),patch.object(T,'Client') as ctor,patch.object(T.time,'sleep'):

@@ -69,7 +69,7 @@ class Weekly:
 
         Vw = eng.V.groupby(wk).sum()
         sv_w = (Vw / eng.vavg.loc[first.values].set_axis(first.index).mul(nd, axis=0).replace(0, np.nan)).clip(0, 10)
-        g_vr = sv_w.T.groupby(G.keys).mean().T
+        g_vr = G.mean(sv_w)
         self.vr = g_vr.div(sv_w.mean(axis=1), axis=0)
         self.nd = nd
 
@@ -102,7 +102,7 @@ def build_history(eng: Engine) -> dict:
         return d
 
     out["groups"]["sector"] = [
-        {"key": s, "name": config.SECTOR_KO.get(s, s), "n": int(len(eng.S.members[s])), **pack(WS, s)}
+        {"key": s, "name": eng.sector_names[s], "n": int(len(eng.S.members[s])), **pack(WS, s)}
         for s in eng.sectors]
     out["groups"]["industry"] = [
         {"key": k, "name": str(eng.ind_name[k]), "sector": eng.ind_sector[k],
@@ -275,7 +275,7 @@ def build_trend(eng: Engine) -> dict:
             "stage2_prev": int((stage.loc[wprev, members] == 2).sum()),
         }
 
-    sectors = [{"key": s, "name": config.SECTOR_KO.get(s, s), **agg(eng.S.members[s])} for s in eng.sectors]
+    sectors = [{"key": s, "name": eng.sector_names[s], **agg(eng.S.members[s])} for s in eng.sectors]
     market = agg(meta.index)
 
     # 주간 breadth 이력 (섹터·시장)
@@ -319,13 +319,16 @@ def build_trend(eng: Engine) -> dict:
             1 if new_d.get(t, False) else (-1 if lost_d.get(t, False) else 0),
             _r(mcap.get(t), 0),
             [_r(ma[n].at[last, t] and A.at[last, t] / ma[n].at[last, t] * 100 - 100, 1) for n in config.DAILY_MAS],
+            [sidx[k] for k in eng.sector_memberships[t]],
+            [iidx[k] for k in eng.industry_memberships[t] if k in iidx],
+            str(meta.at[t,'industry']),
         ])
     return {
         "asof": last.strftime("%Y-%m-%d"), "week": wlast.strftime("%Y-%m-%d"),
         "daily_mas": config.DAILY_MAS, "weekly_mas": config.WEEKLY_MAS,
         "market": market, "sectors": sectors, "history": history,
         "stocks": {"cols": ["ticker", "name", "sector", "ind", "d", "d_streak", "w", "stage", "stage_prev",
-                            "tt", "rs", "from_high", "d_change", "mcap", "gap"],
+                            "tt", "rs", "from_high", "d_change", "mcap", "gap", "sector_ids", "industry_ids", "industry_labels"],
                    "sectors": eng.sectors, "industries": [str(eng.ind_name[k]) for k in eng.industries],
                    "rows": rows},
     }

@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 from . import config
+from .taxonomy import profile, labels_from_profile
 from .universe import HEADERS, SUBTYPE_BLOCK
 
 WD = "월화수목금토일"
@@ -144,7 +145,8 @@ def _section(title: str, items: list[dict], mkt: str, labels: dict, note: str = 
     e = html.escape
     groups: dict[str, list[dict]] = {}
     for r in items:
-        groups.setdefault(label_of(r, mkt, labels), []).append(r)
+        for label in labels_from_profile(profile(r,mkt,labels)):
+            groups.setdefault(label, []).append(r)
     order = sorted(groups, key=lambda k: -max(x["change"] for x in groups[k]))
     out = [f"<b>{title} {len(items)}</b>{note}"]
     for k in order:
@@ -165,7 +167,7 @@ def build_message(mkt: str, day, ath: list[dict], w52: list[dict], labels: dict,
     cond = f"상승률 상위 {c['top_n']} · " if c.get("top_n") else ""
     lines = [f"{m['flag']} <b>{m['label']} 신고가 · {day:%Y.%m.%d}({WD[day.weekday()]})</b>",
              f"{cond}상승·양봉 마감 · 장중 신고가",
-             "업종 기준 묶음 · [소형주]는 규모 태그"]
+             "토스 업종 기준 · 복수 소속은 각 업종에 포함 · [소형주]는 규모 태그"]
     clusters = (extra or {}).get("clusters") or []
     today_cl = [cl for cl in clusters if cl["n"] >= 2]
     if today_cl:
@@ -217,7 +219,7 @@ def record(mkt: str, day, ath: list[dict], w52: list[dict], labels: dict, sig: s
     d = config.NEWHIGH_ROOT / mkt
     d.mkdir(parents=True, exist_ok=True)
     path = d / f"{day:%Y-%m}.csv"
-    cols = ["date", "kind", "rank", "code", "name", "label", "change", "close", "mcap", "classification_version"]
+    cols = ["date", "kind", "rank", "code", "name", "label", "change", "close", "mcap", "classification_version", "labels"]
     old = []
     if path.exists():
         with path.open(encoding="utf-8") as f:
@@ -225,7 +227,8 @@ def record(mkt: str, day, ath: list[dict], w52: list[dict], labels: dict, sig: s
     new = [{"date": day.isoformat(), "kind": kind, "rank": r["rank"], "code": r.get("name"),
             "name": display_name(r, mkt), "label": label_of(r, mkt, labels),
             "change": round(r["change"], 2), "close": r.get("close"), "mcap": r.get("market_cap_basic"),
-            "classification_version": "business-v1"}
+            "classification_version": "business-v1",
+            "labels": json.dumps(labels_from_profile(profile(r,mkt,labels)),ensure_ascii=False)}
            for kind, rows in (("ATH", ath), ("52W", w52)) for r in rows]
     with path.open("w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=cols)

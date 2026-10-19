@@ -139,13 +139,15 @@ def contributions(W: dict, mkt: str) -> dict:
         ind = r[cols["industry"]]
         rows.append({"code": r[cols["ticker"]], "name": name, "ind": ko.get(ind, ind), "week": wk,
                      "w": round(start / tot * 100, 2), "c": round(c, 3)})
-        sk = secs[r[cols["sector"]]]
-        by_sec[sk] = by_sec.get(sk, 0) + c
-    total = sum(x["c"] for x in rows)
+        group_ids = r[cols['sector_ids']] if 'sector_ids' in cols else [r[cols['sector']]]
+        for group_id in group_ids:
+            sk = secs[group_id]
+            by_sec[sk] = by_sec.get(sk, 0) + c / len(group_ids)
+    total = sum(by_sec.values())
     rows.sort(key=lambda x: x["c"])
     neg = [x for x in rows if x["c"] < 0][:10]
     pos = [x for x in rows[::-1] if x["c"] > 0][:10]
-    sec = sorted(({"name": config.SECTOR_KO.get(k, k), "c": round(v, 2)} for k, v in by_sec.items()), key=lambda x: x["c"])
+    sec = sorted(({"name": next((g["name"] for g in W["sectors"] if g["key"]==k),k), "c": round(v, 3)} for k, v in by_sec.items()), key=lambda x: x["c"])
     return {"total": round(total, 2), "down": neg, "up": pos,
             "top5_down": round(sum(x["c"] for x in neg[:5]), 2), "top5_up": round(sum(x["c"] for x in pos[:5]), 2),
             "sectors": sec}

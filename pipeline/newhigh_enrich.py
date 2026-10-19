@@ -290,7 +290,12 @@ def cumulative(records: list[dict], today: str, windows=(5, 20)) -> dict[int, di
         m: dict[str, set] = {}
         for r in records:
             if r["date"] in keep:
-                m.setdefault(r["label"], set()).add(r["code"])
+                labels = r.get('labels') or [r['label']]
+                if isinstance(labels,str):
+                    try: labels = json.loads(labels)
+                    except ValueError: labels = [r['label']]
+                for label in set(labels):
+                    m.setdefault(label,set()).add(r['code'])
         out[w] = m
     return out
 
@@ -415,14 +420,17 @@ def run(mkt: str, day: date, ath: list[dict], w52: list[dict], label_of, display
     hits = [("ATH", r) for r in ath] + [("52W", r) for r in w52]
     today = day.isoformat()
     lab = {str(r.get("name")): label_of(r) for _, r in hits}
+    from .taxonomy import profile, labels_from_profile
+    lab_multi = {str(r.get('name')): labels_from_profile(profile(r,mkt)) for _,r in hits}
     rowmap = {str(r.get("name")): r for _, r in hits}
     by_label: dict[str, list[dict]] = {}
     for _, r in hits:
-        by_label.setdefault(lab[str(r.get("name"))], []).append(r)
+        for label in lab_multi[str(r.get('name'))]:
+            by_label.setdefault(label, []).append(r)
 
     # 군집·누적
     past = [r for r in read_records(mkt) if r["date"] != today]
-    now = [{"date": today, "code": c, "label": l} for c, l in lab.items()]
+    now = [{"date": today, "code": c, "label": l, "labels":lab_multi[c]} for c, l in lab.items()]
     cum = cumulative([r for r in past if r.get("classification_version") == "business-v1"] + now, today)
     clusters = []
     for l, rs in by_label.items():
@@ -519,10 +527,12 @@ def run(mkt: str, day: date, ath: list[dict], w52: list[dict], label_of, display
         if base > 0:
             nd = int((df.index > pd.Timestamp(r["date"])).sum())
             follow.append({"date": r["date"], "code": r["code"], "name": r["name"], "label": r["label"],
-                           "kind": r["kind"], "ret": round((last / base - 1) * 100, 2), "days": nd})
+                           "kind": r["kind"], "ret": round((last / base - 1) * 100, 2), "days": nd,
+                           "labels": labels_from_profile(profile({"name":r["code"]},mkt))})
     perf = {}
     for r in follow:
-        perf.setdefault(r["label"], []).append(r["ret"])
+        for label in r.get('labels',[r['label']]):
+            perf.setdefault(label, []).append(r['ret'])
     perf = {k: {"n": len(v), "med": round(statistics.median(v), 2), "hit": round(sum(x > 0 for x in v) / len(v) * 100)}
             for k, v in perf.items() if len(v) >= 2}
 
@@ -589,7 +599,7 @@ def _write_site(mkt, day, hits, lab, rowmap, prices, news, filings, clusters, cu
     base.mkdir(parents=True, exist_ok=True)
     today = day.isoformat()
     stocks = []
-    from .taxonomy import profile, reviewed_rows
+    from .taxonomy import profile, reviewed_rows, labels_from_profile
     from .newhigh import load_labels
     reviewed, legacy = reviewed_rows(), load_labels()
     for kind, r in hits:
@@ -601,6 +611,7 @@ def _write_site(mkt, day, hits, lab, rowmap, prices, news, filings, clusters, cu
             "mcap": None if r.get("market_cap_basic") is None else round(r["market_cap_basic"] / 1e8),
             "industry": r.get("industry"), "exchange": r.get("exchange"),
             "classification": profile(r, mkt, legacy, reviewed),
+            "labels": labels_from_profile(profile(r, mkt, legacy, reviewed)),
             "chart": series_for_site(df) if df is not None and len(df) >= 30 else None,
             "news": news.get(c, []), "filings": filings.get(c, []),
         })
@@ -614,7 +625,8 @@ def _write_site(mkt, day, hits, lab, rowmap, prices, news, filings, clusters, cu
     idx = json.loads(ip.read_text()) if ip.exists() else {"days": [], "counts": {}}
     idx["counts"][today] = {}
     for c, l in lab.items():
-        idx["counts"][today][l] = idx["counts"][today].get(l, 0) + 1
+        for label in labels_from_profile(profile(rowmap[c],mkt,legacy,reviewed)):
+            idx['counts'][today][label] = idx['counts'][today].get(label,0) + 1
     files = sorted(p.stem for p in base.glob("20*.json"))
     for old in files[:-SITE_KEEP_DAYS]:
         (base / f"{old}.json").unlink()

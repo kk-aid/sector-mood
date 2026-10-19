@@ -57,10 +57,17 @@ def derivative_events(mkt: str, d: pd.Timestamp) -> list[str]:
 class GroupStats:
     """종목 → 그룹(섹터 또는 산업) 단위 일간 원지표."""
 
-    def __init__(self, eng: "Engine", keys: pd.Series):
+    def __init__(self, eng: "Engine", keys: pd.Series, memberships=None):
         self.keys = keys
-        g = lambda df: df.T.groupby(keys).sum(min_count=1).T   # noqa: E731
-        m = lambda df: df.T.groupby(keys).mean().T              # noqa: E731
+        if memberships is None:
+            self.members = {k: keys.index[keys == k] for k in keys.unique()}
+        else:
+            groups = {}
+            for ticker, labels in memberships.items():
+                for label in set(labels):
+                    groups.setdefault(label, []).append(ticker)
+            self.members = {k: pd.Index(v) for k,v in groups.items()}
+        g, m = self.sum, self.mean
         self.cw = g(eng.W * eng.ret) / g(eng.W)
         self.ew = m(eng.ret_clip)
         self.rc = self.cw.sub(eng.mkt_cw, axis=0) * 100
@@ -72,12 +79,17 @@ class GroupStats:
         self.tv = (self.gval / self.gavg).div(eng.mkt_tv_raw, axis=0)
         self.vr = m(eng.sv).div(eng.mkt_vr_raw, axis=0)
         self.breadth = m(eng.up)
-        self.members = {k: keys.index[keys == k] for k in keys.unique()}
+
+    def sum(self, df):
+        return pd.DataFrame({k: df.loc[:,mem].sum(axis=1,min_count=1) for k,mem in self.members.items()})
+
+    def mean(self, df):
+        return pd.DataFrame({k: df.loc[:,mem].mean(axis=1) for k,mem in self.members.items()})
 
 
 class Engine:
     def __init__(self, universe: list[dict], A: pd.DataFrame, C: pd.DataFrame, V: pd.DataFrame,
-                 mkt: str = "us"):
+                 mkt: str = "us", use_toss: bool | None = None):
         self.mkt = mkt
         meta = pd.DataFrame(universe).drop_duplicates("ticker").set_index("ticker")
         cols = [t for t in A.columns if t in meta.index]
@@ -88,30 +100,63 @@ class Engine:
         # 화면 표시용 산업명: FactSet 영문 → 한국어 (config.INDUSTRY_KO, 없으면 원래 값)
         ko = getattr(config, "INDUSTRY_KO", {})
         self.meta["industry"] = [ko.get(en, ind) for en, ind in zip(self.meta["industry_en"], self.meta["industry"])]
-        # Common sectors remain comparable across countries; industry uses a
-        # unique Toss branch when available. Keep ambiguous branches as metadata.
         from .taxonomy import profile, reviewed_rows
         reviewed = reviewed_rows()
+        if use_toss is None:
+            use_toss = mkt in ('kr','us') and not all(u.get('_synthetic') for u in universe)
+        self.use_toss = use_toss
         self.classification_counts = {}
+        self.sector_memberships, self.industry_memberships = {}, {}
+        self.sector_names, self.ind_name, self.ind_sector = {}, {}, {}
         for ticker in self.meta.index:
             row = self.meta.loc[ticker]
-            p = profile({'name': ticker, 'industry': row['industry_en'],
-                         'sector': row['sector']}, mkt, reviewed=reviewed)
+            p = profile({'name': ticker, 'industry': row['industry_en'], 'sector': row['sector']},
+                        mkt, reviewed=reviewed) if use_toss else {'source':'provider'}
             source = p['source']
+            if use_toss and source == 'provider':
+                source = 'unmapped'
             self.classification_counts[source] = self.classification_counts.get(source, 0) + 1
-            if source == 'reviewed':
-                canonical = {v: k for k, v in config.SECTOR_KO.items()}.get(p['sector'], p['sector'])
-                if canonical in config.SECTOR_KO:
-                    self.meta.at[ticker, 'sector'] = canonical
-            if source in ('toss', 'reviewed'):
-                label = p.get('subindustry') or p['industry']
-                self.meta.at[ticker, 'industry'] = label
-                self.meta.at[ticker, 'industry_en'] = f"{source}:{self.meta.at[ticker, 'sector']}:{p['industry']}:{label}"
+            sectors, industries = [], []
+            if source == 'toss':
+                for path in p['toss_memberships']:
+                    if not path:
+                        continue
+                    sk = 'toss:' + path[0]['id']
+                    ik = 'toss:' + '/'.join(n['id'] for n in path)
+                    sectors.append(sk); industries.append(ik)
+                    self.sector_names[sk] = path[0]['name']
+                    self.ind_name[ik] = path[-1]['name']
+                    self.ind_sector[ik] = sk
+                self.meta.at[ticker,'industry'] = ' / '.join(dict.fromkeys(self.ind_name[k] for k in industries))
+            elif source == 'reviewed':
+                sk = 'reviewed:' + p['sector']
+                ik = sk + ':' + p['industry'] + ':' + str(p.get('subindustry') or '')
+                sectors, industries = [sk], [ik]
+                self.sector_names[sk] = '검토 승인 · ' + p['sector']
+                self.ind_name[ik] = p.get('subindustry') or p['industry']
+                self.ind_sector[ik] = sk
+                self.meta.at[ticker,'industry'] = self.ind_name[ik]
+            elif use_toss:
+                sectors, industries = ['toss:unmapped'], ['toss:unmapped:industry']
+                self.sector_names[sectors[0]] = '토스 미등록'
+                self.ind_name[industries[0]] = '토스 미등록'
+                self.ind_sector[industries[0]] = sectors[0]
+                self.meta.at[ticker,'industry'] = '토스 미등록'
+            else:
+                sk,ik = row['sector'],row['industry_en']
+                sectors,industries = [sk],[ik]
+                self.sector_names[sk] = config.SECTOR_KO.get(sk,sk)
+                self.ind_name[ik],self.ind_sector[ik] = row['industry'],sk
+            self.sector_memberships[ticker] = list(dict.fromkeys(sectors))
+            self.industry_memberships[ticker] = list(dict.fromkeys(industries))
+            # First indices are compatibility fields only, never group membership.
+            self.meta.at[ticker,'sector'] = sectors[0]
+            self.meta.at[ticker,'industry_en'] = industries[0]
         if mkt == "kr":                                   # '유한양행보통주' → '유한양행'
             self.meta["name"] = self.meta["name"].astype(str).str.replace(r"\s*보통주$", "", regex=True)
         self.A, self.C, self.V = A[cols], C[cols], V[cols].fillna(0)
         self.sect = self.meta["sector"]
-        self.sectors = sorted(self.sect.unique(), key=lambda s: config.SECTOR_KO.get(s, s))
+        self.sectors = sorted(self.sector_names, key=lambda s: self.sector_names[s])
         self._prepare()
 
     def _prepare(self):
@@ -136,17 +181,12 @@ class Engine:
         self.mkt_vr_raw = self.sv.mean(axis=1)
 
         # 섹터 / 산업
-        self.S = GroupStats(self, self.sect)
-        self.I = GroupStats(self, self.meta["industry_en"])
-        ind_sector = self.meta.groupby("industry_en")["sector"].agg(lambda x: x.mode().iloc[0])
-        ind_name = self.meta.groupby("industry_en")["industry"].agg(lambda x: x.mode().iloc[0])
-        sizes = self.meta["industry_en"].value_counts()
-        keep = [k for k in sizes.index if sizes[k] >= config.INDUSTRY_MIN_N]
-        sidx = {s: i for i, s in enumerate(self.sectors)}
-        self.industries = sorted(keep, key=lambda k: (sidx[ind_sector[k]], str(ind_name[k])))
-        self.ind_sector, self.ind_name = ind_sector, ind_name
+        self.S = GroupStats(self, self.sect, self.sector_memberships)
+        self.I = GroupStats(self, self.meta['industry_en'], self.industry_memberships)
+        keep = [k for k,mem in self.I.members.items() if len(mem) >= config.INDUSTRY_MIN_N]
+        sidx = {s:i for i,s in enumerate(self.sectors)}
+        self.industries = sorted(keep, key=lambda k: (sidx[self.ind_sector[k]], str(self.ind_name[k])))
 
-    # 테스트·하위호환용 별칭 (섹터 단위)
     rc = property(lambda self: self.S.rc)
     re = property(lambda self: self.S.re)
     tv = property(lambda self: self.S.tv)
@@ -272,7 +312,7 @@ class Engine:
                 },
             }
 
-        sectors = [{"key": s, "name": config.SECTOR_KO.get(s, s), **block(self.S, s)} for s in self.sectors]
+        sectors = [{"key": s, "name": self.sector_names[s], **block(self.S, s)} for s in self.sectors]
         industries = [{"key": k, "name": str(self.ind_name[k]), "sector": self.ind_sector[k],
                        **block(self.I, k)} for k in self.industries]
 
@@ -300,7 +340,9 @@ class Engine:
                 _r(vw / (n * avg), 2) if avg and np.isfinite(avg) and avg > 0 else None,
                 _r(self.meta.at[t, "shares"] * last_close.get(t, np.nan) / 1e8, 0),   # 억 (현지 통화)
                 _r(dmcap.get(t, np.nan) / 1e8, 0),                                    # 주간 시총 증감, 억
-                iidx.get(self.meta.at[t, "industry_en"], -1),                          # 산업 번호 (-1: 표시 안 함)
+                iidx.get(self.meta.at[t, "industry_en"], -1),
+                [sidx[k] for k in self.sector_memberships[t]],
+                [iidx[k] for k in self.industry_memberships[t] if k in iidx],
             ])
 
         return {
@@ -319,7 +361,7 @@ class Engine:
             "industries": industries,
             "stocks": {
                 "cols": ["ticker", "name", "sector", "industry", "days", "week",
-                         "upshare", "share", "valx", "mcap", "dmcap", "ind"],
+                         "upshare", "share", "valx", "mcap", "dmcap", "ind", "sector_ids", "industry_ids"],
                 "sectors": self.sectors,
                 "rows": rows,
             },
@@ -354,7 +396,7 @@ def write_outputs(engine: Engine, universe_label: str, n_weeks: int):
     (out / "weeks").mkdir(parents=True, exist_ok=True)
     weeks = engine.week_keys()
     import hashlib
-    mapping = engine.meta[['sector', 'industry_en', 'industry']].sort_index().to_json(force_ascii=False)
+    mapping = json.dumps({'sectors': engine.sector_memberships, 'industries':engine.industry_memberships, 'names':engine.ind_name}, ensure_ascii=False, sort_keys=True)
     fingerprint = hashlib.sha256(mapping.encode('utf-8')).hexdigest()
     previous = out / 'index.json'
     old = json.loads(previous.read_text(encoding='utf-8')) if previous.exists() else {}
@@ -377,8 +419,8 @@ def write_outputs(engine: Engine, universe_label: str, n_weeks: int):
         "currency": mk["currency"],
         "market": engine.mkt, "label": mk["label"], "flag": mk["flag"],
         "classification_fingerprint": fingerprint,
-        "classification": {"sector": "공통 공급자 분류", "industry": "토스·검토 승인 우선, 나머지 공급자 분류",
-                           "counts": engine.classification_counts, "basis": "현재 분류 기준 재집계"},
+        "classification": {"sector": "토스 대분류" if engine.use_toss else "공급자 분류", "industry": "토스 전체 소속, 미등록 별도" if engine.use_toss else "공급자 분류",
+                           "counts": engine.classification_counts, "basis": "현재 분류 기준 재집계", "overlap": engine.use_toss},
     }
     (out / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1))
     if engine.mkt == "us":

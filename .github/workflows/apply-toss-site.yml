@@ -36,6 +36,8 @@ jobs:
           python -m unittest tests.test_site_classification tests.test_taxonomy tests.test_toss_classify
           python -m tests.test_compute
           python -m tests.test_analytics
+          python -m tests.test_newhigh
+          PYTHONWARNINGS=ignore python -m tests.test_weekly
           node --check docs/app.js
       - name: Refresh stored new-high pages without sending messages
         run: python -m pipeline.refresh_classification
@@ -52,6 +54,7 @@ jobs:
         run: |
           python -m pipeline.run --market kr --weeks 2
           python -m pipeline.run --market us --weeks 2
+          python -m pipeline.weekly --all
       - name: Publish map classification
         if: always()
         run: |

@@ -13,6 +13,9 @@ def row(code, chg, close, open_, high, ath, w52, **kw):
 
 
 def main():
+    from unittest.mock import patch
+    cache = patch("pipeline.taxonomy.toss_rows", return_value=({}, None))
+    cache.start()
     rows = [
         row("A", 10, 110, 100, 112, 112, 112),             # 역대 신고가
         row("B", 9, 109, 100, 110, 200, 110),              # 52주만
@@ -62,18 +65,18 @@ def main():
 
     # 업종은 승인 분류 또는 공급자 산업. 기존 테마·규모가 덮어쓰지 않음
     labels = {("kr", "A"): "후공정·OSAT·장비"}
-    assert newhigh.label_of(rows[0], "kr", labels) == "반도체"
+    assert newhigh.label_of(rows[0], "kr", labels) == "토스 미등록"
     small = row("Z", 5, 1, 1, 1, 1, 1, market_cap_basic=3e10)
-    assert newhigh.label_of(small, "kr", {}) == "반도체"
+    assert newhigh.label_of(small, "kr", {}) == "토스 미등록"
     assert newhigh.size_tag(small, "kr") == " [소형주]"
-    assert newhigh.label_of(small, "us", {}) == "반도체"          # 미국은 소형주 묶음 없음
-    assert newhigh.label_of({**rows[1], "industry": "Unknown X"}, "kr", {}) == "Unknown X"
+    assert newhigh.label_of(small, "us", {}) == "토스 미등록"          # 미국은 소형주 묶음 없음
+    assert newhigh.label_of({**rows[1], "industry": "Unknown X"}, "kr", {}) == "토스 미등록"
     assert newhigh.display_name({"name": "005930", "description": "삼성전자보통주"}, "kr") == "삼성전자"
 
     # 메시지: 같은 라벨은 한 줄, 등락률 높은 그룹 먼저
     msg = newhigh.build_message("kr", date(2026, 10, 15), ath, w52, labels)
     assert "2026.10.15(목)" in msg and "🏆 역대 신고가 2" in msg and "52주 신고가 1" in msg
-    assert "(반도체) A +10.0%" in msg and "E +6.0%" in msg
+    assert "(토스 미등록) A +10.0%" in msg and "E +6.0%" in msg
     empty = newhigh.build_message("us", date(2026, 10, 15), [], [], {})
     assert "조건을 충족한 종목 없음" in empty
 
@@ -103,6 +106,7 @@ def main():
         msg = newhigh.build_message(mkt, date(2026, 10, 15), ath, w52, labels)
         assert all(len(p) < 4096 for p in newhigh.split_message(msg))
         assert "상승률 상위" not in msg
+    cache.stop()
     print("test_newhigh: OK")
 
 

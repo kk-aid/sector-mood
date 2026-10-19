@@ -1,6 +1,6 @@
 """Separate business classification, legacy theme tags and size.
 
-Priority: evidenced manual review > unambiguous fresh Toss hierarchy > provider industry.
+Priority: all fresh Toss branches > evidenced manual review > explicit unmapped.
 DART candidates are never automatically promoted by this module.
 """
 from __future__ import annotations
@@ -61,15 +61,20 @@ def profile(row, market, legacy=None, reviewed=None, asset="stock"):
     lookup = 'etf:' + code if asset == 'etf' else code
     membership = markets.get(market, {}).get(lookup)
     out.update(toss_memberships=(membership or {}).get('memberships', []), toss_asof=asof)
+    out['provider_sector'] = sector
+    out['provider_industry'] = industry
     if membership:
-        primary = membership.get('primary')
-        out['toss_ambiguous'] = membership.get('ambiguous', False)
-        if primary:
-            by_depth = {p['depth']:p['name'] for p in primary}
-            out.update(sector=by_depth.get(0, sector), industry=by_depth.get(1, by_depth.get(0, industry)),
-                       subindustry=by_depth.get(2), source='toss', status='provider_classified',
-                       source_url='https://developers.tossinvest.com/docs', reviewed_on=None)
-    if approved:
+        paths = membership.get('memberships', [])
+        roots = list(dict.fromkeys(p[0]['name'] for p in paths if p))
+        industries = list(dict.fromkeys(p[min(1,len(p)-1)]['name'] for p in paths if p))
+        leaves = list(dict.fromkeys(p[-1]['name'] for p in paths if len(p)>2))
+        out.update(sector=' / '.join(roots), industry=' / '.join(industries),
+                   subindustry=' / '.join(leaves) or None, source='toss',
+                   status='provider_classified', toss_ambiguous=len(paths)>1,
+                   source_url='https://developers.tossinvest.com/docs', reviewed_on=None)
+        if approved:
+            out['reviewed_business'] = approved
+    elif approved:
         approved_sector = approved.get('sector') or sector
         approved_sector = config.SECTOR_KO.get(approved_sector, approved_sector)
         out.update(sector=approved_sector, industry=approved['industry'],
@@ -77,8 +82,19 @@ def profile(row, market, legacy=None, reviewed=None, asset="stock"):
                    themes=[x.strip() for x in approved.get('themes', '').split('|') if x.strip()],
                    source='reviewed', source_url=approved['source_url'],
                    reviewed_on=approved['reviewed_on'], status='approved')
+    elif market in ('kr','us'):
+        out.update(sector='토스 미등록', industry='토스 미등록', subindustry=None,
+                   source='unmapped', status='toss_unmapped')
     # Size is metadata; it never replaces the business industry.
     limit = config.NEWHIGH[market]['small_cap']
     cap = row.get('market_cap_basic')
     out['size'] = '소형주' if limit and cap is not None and cap < limit else None
     return out
+
+
+def labels_from_profile(p):
+    """All Toss branches; each stock occurs once per branch, never per ancestor."""
+    if p['source'] == 'toss':
+        return list(dict.fromkeys(' › '.join(x['name'] for x in path[:2])
+                                 for path in p.get('toss_memberships', []) if path))
+    return [p['industry']]

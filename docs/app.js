@@ -12,8 +12,8 @@ const WD = ["월","화","수","목","금"];
 const DSTATE = {"2":"완전 정배열","1":"정배열 진행","0":"혼조","-1":"역배열 진행","-2":"완전 역배열"};
 const DCLS = {"2":"st2","1":"st1","0":"st0","-1":"stm1","-2":"stm2"};
 const DESC = {
-  map: "대분류는 국가 공통 공급자 기준, 세부업종은 토스·검토 승인 우선(복수 분류는 기존 업종). 현재 분류 기준으로 과거도 재집계함. 거래와 등락을 함께 본 그날의 업종 심리. 상대 등락은 시장 대비 %p, 상대 거래는 업종의 직전 20거래일 평균 대비 배수를 시장 배수로 나눈 값. 섹터 이름 앞 ▸ 를 누르면 산업이 펼쳐지고, 칸을 누르면 종목이 열림.",
-  cross: "같은 업종을 미국·한국·일본에서 같은 주에 나란히 놓은 것. 세 시장이 같은 방향으로 기준을 넘으면 '공통', 반대로 넘으면 '엇갈림'. 각 칸은 해당 시장 안에서의 시장 대비 판정임.",
+  map: "한국·미국은 토스 대분류·세부업종 기준. 복수 소속은 각 업종에 포함하며 시장 전체는 종목당 한 번 계산함. 업종별 종목 수·거래 몫은 합산하지 않음. 일본은 기존 분류. 현재 분류 기준으로 과거도 재집계함. 거래와 등락을 함께 본 그날의 업종 심리. 상대 등락은 시장 대비 %p, 상대 거래는 업종의 직전 20거래일 평균 대비 배수를 시장 배수로 나눈 값. 섹터 이름 앞 ▸ 를 누르면 산업이 펼쳐지고, 칸을 누르면 종목이 열림.",
+  cross: "한·미는 토스, 일본은 기존 분류이므로 매핑되지 않은 업종은 별도 행으로 표시함. 같은 업종을 미국·한국·일본에서 같은 주에 나란히 놓은 것. 세 시장이 같은 방향으로 기준을 넘으면 '공통', 반대로 넘으면 '엇갈림'. 각 칸은 해당 시장 안에서의 시장 대비 판정임.",
   rrg: "가로 = RS 추세(시장 대비 강도 ÷ 최근 10주 평균, 100 위면 평균보다 강함), 세로 = RS 모멘텀(RS 추세의 4주 변화, 100 위면 개선 중). 보통 개선 → 선도 → 약화 → 소외 순으로 시계 방향으로 돈다.",
   streak: "업종별 최근 12주 주간 판정 띠. 같은 판정이 이어지는 주 수(연속)를 보면 일회성 반짝인지 지속되는 흐름인지 구분할 수 있음.",
   trend: "종목별 이평 배열(일봉 5·20·60·120·200, 주봉 10·20·30·40), Weinstein Stage(30주선), Minervini 트렌드 템플릿 8조건과 업종 breadth(이평선 위 비율, 52주 신고가·신저가). 최신 거래일 기준 스냅샷.",
@@ -142,7 +142,7 @@ async function openMarket(key, week){
   $("#meta").textContent = `최근 거래일 ${INDEX.last_day} · 유니버스 ${INDEX.universe} (시총 ${moneyFmt(INDEX.min_mcap/1e8, INDEX.currency||"달러")} 이상 → ${INDEX.n_stocks.toLocaleString()}종목, 월 1회 고정) · 갱신 ${INDEX.generated}`;
   if(INDEX.classification){
     const c = INDEX.classification.counts || {};
-    $("#meta").textContent += ` · 세부업종 토스 ${c.toss||0} / 검토 승인 ${c.reviewed||0} / 기존 분류 ${(c.provider||0)+(c.unknown||0)} · 현재 분류 기준 재집계`;
+    $("#meta").textContent += ` · 세부업종 토스 ${c.toss||0} / 검토 승인 ${c.reviewed||0} / 토스 미등록 ${c.unmapped||0} / 기존 분류 ${(c.provider||0)+(c.unknown||0)} · 현재 분류 기준 재집계`;
   }
   $("#week").innerHTML = INDEX.weeks.slice().reverse().map(w => `<option value="${w}">${md(w)}(월) 주</option>`).join("");
   await openWeek(INDEX.weeks.includes(week) ? week : INDEX.weeks[INDEX.weeks.length-1]);
@@ -320,7 +320,7 @@ function renderDrill(){
   const q = ($("#q")?.value || "").trim().toLowerCase();
   const si = W.stocks.sectors.indexOf(isInd ? g.sector : g.key);
   const ii = isInd ? W.industries.findIndex(x => x.key===g.key) : -1;
-  let rows = W.stocks.rows.filter(r => isInd ? r[11]===ii : r[2]===si);
+  let rows = W.stocks.rows.filter(r => isInd ? (r[13]||[r[11]]).includes(ii) : (r[12]||[r[2]]).includes(si));
   const total = rows.length;
   if(q) rows = rows.filter(r => (r[0]+" "+r[1]+" "+r[3]).toLowerCase().includes(q));
   const val = (r, col) => {
@@ -627,18 +627,18 @@ async function renderTrendDrill(){
   $("#crumb").textContent = `${INDEX.label||"미국"} · 추세·폭 · ${T.asof} 기준`;
   $("#dtitle").textContent = sname + (trendF.d!=null ? ` · 일봉 ${DSTATE[trendF.d]} × 주봉 ${DSTATE[trendF.w]}` : "");
   const si = trendF.sector ? T.stocks.sectors.indexOf(trendF.sector) : -1;
-  let rows = T.stocks.rows.filter(r => si<0 || r[2]===si);
+  let rows = T.stocks.rows.filter(r => si<0 || (r[15]||[r[2]]).includes(si));
   if(trendF.d!=null) rows = rows.filter(r => String(r[4])===trendF.d && String(r[6])===trendF.w);
   const base = rows.length;
   const F = {all:()=>true, full:r=>r[4]===2, newup:r=>r[12]===1, lost:r=>r[12]===-1, s2:r=>r[7]===2, news2:r=>r[7]===2&&r[8]!=null&&r[8]!==2, tt:r=>r[9]===8, rs80:r=>r[10]>=80};
   rows = rows.filter(F[trendF.f]);
   const q = ($("#q")?.value||"").trim().toLowerCase();
   const inds = T.stocks.industries;
-  if(q) rows = rows.filter(r => (r[0]+" "+r[1]+" "+(inds[r[3]]||"")).toLowerCase().includes(q));
+  if(q) rows = rows.filter(r => (r[0]+" "+r[1]+" "+(r[17]||inds[r[3]]||"")).toLowerCase().includes(q));
   document.querySelectorAll("#tchips [data-tf]").forEach(b => b.classList.toggle("on", b.dataset.tf===trendF.f));
   const s = T.sectors.find(x => x.key===trendF.sector) || T.market;
   $("#dstats").innerHTML = `<span>종목 <b>${s.n}</b></span><span>일봉 완전 정배열 <b>${s.d["2"]}</b></span><span>Stage 2 <b>${s.stage["2"]}</b></span><span>8/8 <b>${s.tt}</b></span><span>50일선 위 <b>${s.a50??"–"}%</b></span><span>200일선 위 <b>${s.a200??"–"}%</b></span><span>이번 주 신고가·신저가 <b>${s.nh_w}·${s.nl_w}</b></span>`;
-  const val = (r,c) => ({name:r[1], ind:inds[r[3]]||"", d:r[4]*1000+r[5], w:r[6], stage:r[7], tt:r[9], rs:r[10], hi:r[11], mcap:r[13], g20:r[14][1], g200:r[14][4]}[c]);
+  const val = (r,c) => ({name:r[1], ind:r[17]||inds[r[3]]||"", d:r[4]*1000+r[5], w:r[6], stage:r[7], tt:r[9], rs:r[10], hi:r[11], mcap:r[13], g20:r[14][1], g200:r[14][4]}[c]);
   rows.sort((a,b) => { const x = val(a,dSort.col), y = val(b,dSort.col); if(x==null) return 1; if(y==null) return -1; return (typeof x==="string"?x.localeCompare(y):x-y)*dSort.dir; });
   $("#dcnt").textContent = `${rows.length} / ${base}종목`;
   const th = (col, label, cls="") => `<th class="sortable${dSort.col===col?" sorted":""}${cls}" data-col="${col}">${label}${dSort.col===col?(dSort.dir<0?" ▾":" ▴"):""}</th>`;
@@ -647,7 +647,7 @@ async function renderTrendDrill(){
   rows.slice(0, 600).forEach((r,n) => {
     const chg = r[12]===1 ? ` <span class="pos" title="오늘 신규 진입">●</span>` : r[12]===-1 ? ` <span class="neg" title="오늘 이탈">○</span>` : "";
     const sg = r[7]==null ? "–" : (r[8]!=null && r[8]!==r[7] ? `<span class="stg stg${r[8]}" style="opacity:.5">${r[8]}</span>→<span class="stg stg${r[7]}">${r[7]}</span>` : `<span class="stg stg${r[7]}">${r[7]}</span>`);
-    h += `<tr><td class="mono" style="color:var(--ink3)">${n+1}</td><td class="nm l"><b>${esc(r[1])}</b><small class="mono">${esc(r[0])}</small></td><td class="ind l">${esc(inds[r[3]]||"")}</td>
+    h += `<tr><td class="mono" style="color:var(--ink3)">${n+1}</td><td class="nm l"><b>${esc(r[1])}</b><small class="mono">${esc(r[0])}</small></td><td class="ind l">${esc(r[17]||inds[r[3]]||"")}</td>
       <td class="ctr"><span class="state ${DCLS[r[4]]}">${DSTATE[r[4]]}</span>${chg} <span class="mono" style="font-size:11px;color:var(--ink3)">${r[5]}일</span></td>
       <td class="ctr">${r[6]==null?"–":`<span class="state ${DCLS[r[6]]}">${DSTATE[r[6]]}</span>`}</td>
       <td class="ctr">${sg}</td>
@@ -924,7 +924,7 @@ async function renderWeekly(){
     h += `<div class="wk-kicker" style="margin-top:24px">지수 기여도</div><p class="sdesc">재구성 시총가중 ${pc(CB.total)}p를 종목별로 나눈 것. 기여 = 주 시작 시총 비중 × 주간 수익률. 끌어내린 상위 5 합계 ${pc(CB.top5_down)}p${CB.total<0?share(CB.top5_down, CB.total):""}, 끌어올린 상위 5 합계 ${pc(CB.top5_up)}p.</p>
       <div class="wk-two"><div class="card wk-pane"><h3>지수를 끌어내린 종목</h3>${hbars(CB.down, {val:x=>x.c, label:x=>x.name, sub:csub, fmtv:v=>pc(v)+"p"})}</div>
       <div class="card wk-pane"><h3>지수를 끌어올린 종목</h3>${hbars(CB.up, {val:x=>x.c, label:x=>x.name, sub:csub, fmtv:v=>pc(v)+"p"})}</div></div>
-      <div class="card wk-pane" style="margin-top:12px"><h3>섹터별 기여 <small>합계 ${pc(CB.total)}p</small></h3>${hbars(CB.sectors.slice().sort((a,b)=>a.c-b.c), {val:x=>x.c, label:x=>x.name, fmtv:v=>pc(v)+"p", cls:"two"})}</div>`;
+      <div class="card wk-pane" style="margin-top:12px"><h3>섹터별 기여 (복수 소속은 동일 분할) <small>합계 ${pc(CB.total)}p</small></h3>${hbars(CB.sectors.slice().sort((a,b)=>a.c-b.c), {val:x=>x.c, label:x=>x.name, fmtv:v=>pc(v)+"p", cls:"two"})}</div>`;
   }
 
   // 흐름: 지속·로테이션·연속·신고가
@@ -973,11 +973,11 @@ const KIND = {ATH:"역대", "52W":"52주"};
 function nhClassification(st){
   const c = st.classification;
   if(!c) return esc(st.industry||"");
-  const source = {toss:"토스", reviewed:"검토 승인", provider:"기존 공급자", unknown:"미분류"}[c.source] || "기존 공급자";
+  const source = {toss:"토스", reviewed:"검토 승인", provider:"기존 공급자", unknown:"미분류", unmapped:"토스 미등록"}[c.source] || "기존 공급자";
   const path = [c.sector,c.industry,c.subindustry].filter(x=>x && x!=="미분류");
   const memberships = (c.toss_memberships||[]).map(p=>p.map(x=>x.name).join(" › "));
   return `<span>${esc(path.join(" › ") || st.label)} · ${esc(source)}</span>` +
-    (memberships.length ? `<div style="margin-top:4px;color:var(--ink3)">토스 소속: ${memberships.map(esc).join(" / ")}${c.toss_ambiguous?" · 복수 분류, 기본 업종으로 집계":""}</div>` : "");
+    (memberships.length ? `<div style="margin-top:4px;color:var(--ink3)">토스 소속: ${memberships.map(esc).join(" / ")}${c.toss_ambiguous?" · 각 소속 업종에 포함":""}</div>` : "");
 }
 
 function nhLinks(st){
@@ -1027,9 +1027,10 @@ async function renderNewhigh(){
   const cur = INDEX?.currency || {us:"달러", kr:"원", jp:"엔"}[MKT];
   const cl = D.clusters || [], clSet = new Set(cl.map(c => c.label));
   const perf = D.perf || {};
-  const labelsAll = [...new Set(D.stocks.map(s => s.label))];
+  const nhLabels = s => s.labels || [s.label];
+  const labelsAll = [...new Set(D.stocks.flatMap(nhLabels))];
   if(nhF.label && !labelsAll.includes(nhF.label)) nhF.label = "";
-  let stocks = D.stocks.filter(s => (nhF.kind==="all" || s.kind===nhF.kind) && (!nhF.label || s.label===nhF.label) && (!nhF.cluster || clSet.has(s.label)));
+  let stocks = D.stocks.filter(s => (nhF.kind==="all" || s.kind===nhF.kind) && (!nhF.label || nhLabels(s).includes(nhF.label)) && (!nhF.cluster || nhLabels(s).some(l=>clSet.has(l))));
 
   // 컨트롤
   const dayOpts = NI.days.slice().reverse().map(d => `<option value="${d}"${d===NHDAY?" selected":""}>${d}</option>`).join("");
@@ -1047,7 +1048,7 @@ async function renderNewhigh(){
     h += `<h2 class="sh" style="margin-top:6px">🔥 군집 <span class="tag">같은 라벨 ${3}종목 이상 또는 5일 누적 6종목 이상</span></h2>
       <div class="card"><div class="scroll"><table class="tbl"><thead><tr><th class="l">라벨</th><th>오늘</th><th>5일</th><th>20일</th><th class="l">업종 흐름 (업종 심리 지도)</th><th class="l">재료 (공시·뉴스 첫 항목)</th><th>신고가 이후</th></tr></thead><tbody>`;
     for(const c of cl){
-      const ss = D.stocks.filter(s => s.label===c.label);
+      const ss = D.stocks.filter(s => nhLabels(s).includes(c.label));
       const f = ss.flatMap(s => (s.filings||[]).slice(0,1).map(x => ({...x, nm:s.name, k:"공시"})))[0] ||
                 ss.flatMap(s => (s.news||[]).slice(0,1).map(x => ({...x, nm:s.name, k:"뉴스"})))[0];
       const cx = c.context;
@@ -1075,12 +1076,12 @@ async function renderNewhigh(){
       `</tbody></table></div></div>`;
   }
 
-  // 종목 카드 (라벨별, 군집 먼저)
+  // 종목 카드 (토스 각 소속 업종에 포함, 상단 총계는 고유 종목 수)
   const groups = {};
-  stocks.forEach(s => (groups[s.label] = groups[s.label] || []).push(s));
+  stocks.forEach(s => nhLabels(s).filter(l => (!nhF.label || l===nhF.label) && (!nhF.cluster || clSet.has(l))).forEach(l => (groups[l] = groups[l] || []).push(s)));
   const gorder = Object.keys(groups).sort((a,b) => (clSet.has(b)-clSet.has(a)) || groups[b].length-groups[a].length || Math.max(...groups[b].map(s=>s.change))-Math.max(...groups[a].map(s=>s.change)));
   h += `<h2 class="sh">종목 <span class="tag">${stocks.length}종목 · ${D.day}</span></h2>
-    <p class="sdesc">차트: 최근 1년 종가(검정), 20·50·200일선(빨강·주황·파랑), 점선 = 직전 52주 고점. 뉴스·공시는 최근 ${3}일, 제목과 링크만 표시함. 재료가 없으면 수급·순환매일 가능성도 있음.</p>`;
+    <p class="sdesc">복수 소속 종목은 각 업종에 표시되며 상단 총계는 고유 종목 수. 차트: 최근 1년 종가(검정), 20·50·200일선(빨강·주황·파랑), 점선 = 직전 52주 고점. 뉴스·공시는 최근 ${3}일, 제목과 링크만 표시함. 재료가 없으면 수급·순환매일 가능성도 있음.</p>`;
   for(const g of gorder){
     const ss = groups[g].sort((a,b) => b.change-a.change);
     h += `<div class="nhg"><div class="nhg-h"><b>${esc(g)}</b> <span>${ss.length}종목</span>${clSet.has(g)?` <span class="badge up">군집</span>`:""}</div><div class="nhgrid">`;

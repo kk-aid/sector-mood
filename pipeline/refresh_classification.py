@@ -9,7 +9,7 @@ import json
 import statistics
 
 from . import config
-from .taxonomy import profile, reviewed_rows, toss_rows
+from .taxonomy import profile, reviewed_rows, toss_rows, labels_from_profile
 
 
 def refresh(market):
@@ -25,11 +25,12 @@ def refresh(market):
                    'market_cap_basic': None if stock.get('mcap') is None else stock['mcap'] * 1e8}
             p = profile(row, market, reviewed=reviewed)
             stock.setdefault('provider_label', stock['label'])
-            if p['source'] in ('toss', 'reviewed'):
+            if p['source'] in ('toss', 'reviewed', 'unmapped'):
                 stock['label'] = p['industry']
             else:
                 stock['label'] = p['industry'] if stock.get('industry') else stock['provider_label']
             stock['classification'] = p
+            stock['labels'] = labels_from_profile(p)
             known[code] = stock['label']
             counts[p['source']] += 1
     records = []
@@ -40,9 +41,10 @@ def refresh(market):
         for row in rows:
             code = row['code']
             p = profile({'name': code}, market, reviewed=reviewed)
-            row['label'] = p['industry'] if p['source'] in ('toss', 'reviewed') else known.get(code, row['label'])
+            row['label'] = p['industry'] if p['source'] in ('toss', 'reviewed', 'unmapped') else known.get(code, row['label'])
+            row['labels'] = json.dumps(labels_from_profile(p), ensure_ascii=False)
         with path.open('w', encoding='utf-8', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=fields)
+            writer = csv.DictWriter(f, fieldnames=list(dict.fromkeys(fields + ['labels'])))
             writer.writeheader()
             writer.writerows(rows)
         records.extend(rows)
@@ -51,11 +53,12 @@ def refresh(market):
         today = page['day']
         # The stored page may exist without a corresponding CSV record.
         history = [r for r in records if r['date'] != today]
-        history += [{'date': today, 'code': s['code'], 'label': s['label']} for s in page['stocks']]
+        history += [{'date': today, 'code': s['code'], 'label': s['label'], 'labels': s['labels']} for s in page['stocks']]
         cum = cumulative(history, today)
         groups = defaultdict(list)
         for s in page['stocks']:
-            groups[s['label']].append(s)
+            for label in s['labels']:
+                groups[label].append(s)
         page['clusters'] = sorted([
             {'label': label, 'n': len(stocks), 'n5': len(cum[5].get(label, ())),
              'n20': len(cum[20].get(label, ())),
@@ -67,13 +70,16 @@ def refresh(market):
             page[f'cum{w}'] = {k: len(v) for k, v in cum[w].items()}
         for row in page.get('follow', []):
             p = profile({'name': row['code']}, market, reviewed=reviewed)
-            if p['source'] in ('toss', 'reviewed'):
+            if p['source'] in ('toss', 'reviewed', 'unmapped'):
                 row['label'] = p['industry']
             else:
                 row['label'] = known.get(row['code'], row['label'])
         perf = defaultdict(list)
         for row in page.get('follow', []):
-            perf[row['label']].append(row['ret'])
+            p = profile({'name': row['code']}, market, reviewed=reviewed)
+            row['labels'] = labels_from_profile(p)
+            for label in row['labels']:
+                perf[label].append(row['ret'])
         page['perf'] = {k: {'n': len(v), 'med': round(statistics.median(v), 2),
                             'hit': round(sum(x > 0 for x in v) / len(v) * 100)}
                         for k, v in perf.items() if len(v) >= 2}
@@ -82,7 +88,7 @@ def refresh(market):
     ip = root / 'index.json'
     if ip.exists():
         idx = json.loads(ip.read_text(encoding='utf-8'))
-        idx['counts'] = {p['day']: dict(Counter(s['label'] for s in p['stocks'])) for _, p in pages}
+        idx['counts'] = {p['day']: dict(Counter(label for s in p['stocks'] for label in s['labels'])) for _, p in pages}
         idx['classification_refreshed'] = datetime.now(timezone.utc).isoformat()
         ip.write_text(json.dumps(idx, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     print(f'[classification-site:{market}] pages={len(pages)} stock appearances={dict(counts)}')
