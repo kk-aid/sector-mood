@@ -1,12 +1,7 @@
 name: toss-sector-sync
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'pipeline/toss_classify.py'
-      - '.github/workflows/toss-classification.yml'
   schedule:
-    - cron: "30 20 * * *"
+    - cron: "0 12 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -24,7 +19,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'push' }}
 jobs:
   sync:
-    if: github.event_name != 'schedule' || vars.TOSS_ENABLED == 'true'
+    if: github.event_name != 'schedule' || vars.TOSS_ENABLED != 'false'
     # Use a runner whose outbound IP is registered with Toss.
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 40
