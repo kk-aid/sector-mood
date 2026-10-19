@@ -260,3 +260,42 @@ cd docs && python -m http.server               # http://localhost:8000
 공식 API 문서:
 https://opendart.fss.or.kr/guide/detail.do?apiGrpCd=DS001&apiId=2019002
 https://opendart.fss.or.kr/guide/detail.do?apiGrpCd=DS001&apiId=2019003
+
+### 토스증권 공식 섹터 연결 (PR #2 확장)
+
+기본 업종 소스는 **승인한 수동 분류 → 토스증권 → FactSet → 미분류** 순서이다.
+DART는 국내 기업의 애매한 분류를 검토하는 근거로 유지한다.
+토스의 대/중/소분류 및 국내·미국 주식/ETF의 복수 소속을 보존하며, 단일 계층일 때만
+기본 업종으로 사용한다. 여러 다른 하위업종에 속하면 임의 주력업종을 만들지 않고
+기존 공급자 업종으로 묶고 토스 복수 소속을 상세 메타데이터에 보존한다.
+ETF 소속과 주식 소속은 별도 키로 저장한다. 일본은 기존 공급자 분류를 사용한다.
+
+연결 준비:
+
+1. GitHub Actions Secrets에 `TOSS_CLIENT_ID`, `TOSS_CLIENT_SECRET` 등록.
+   다른 프로그램과 함께 쓰지 않는 별도 API 클라이언트를 권장한다. 토큰 재발급 시
+   같은 client의 기존 토큰이 즉시 무효화되기 때문이다.
+2. 토스 WTS 설정 → Open API → 허용 IP에 **실제 실행 환경의 고정 송신 IP** 등록.
+   일반 GitHub-hosted runner의 IP는 고정되지 않는다. 등록 가능한 고정 송신 IP가
+   있는 러너를 준비하고 Repository Variables의 `TOSS_RUNNER`에 runner label을 넣는다.
+   미설정이면 ubuntu-latest이며 IP 허용 조건을 충족하지 못하면 403으로 실패한다.
+   코드에서 IP 제한을 우회하거나 광범위한 IP를 자동 등록하지 않는다.
+3. `toss-sector-sync`를 수동으로 dry_run=true, probe=true로 실행해 연결 확인.
+   main에 이 코드가 반영되는 최초 push도 같은 소량 dry-run을 실행한다. PR 이벤트에는
+   비밀 키를 전달하지 않는다. 이 확인은 데이터 저장·텔레그램 전송을 하지 않는다.
+4. 연결 확인 후 dry_run=false로 전체 분류를 수집한다. 매일 05:30 KST 자동 갱신은
+   Repository Variables의 `TOSS_ENABLED=true`로 켠다. 그 전에는 예약 실행을 건너뛴다.
+
+공식 `Sector` API의 목록·구성 주식·관련 ETF만 GET으로 사용한다. 인증 토큰 교환 외
+POST, 계좌 조회·주문 엔드포인트는 사용하지 않으며 코드 allowlist로 차단한다.
+인증값·토큰을 파일·로그·저장소에 저장하지 않는다. 분류 캐시는
+`data/newhigh/toss/labels.json`이며, 전체 수집이 성공한 뒤에만 원자적으로 교체한다.
+14일 이상 오래된 캐시나 부분 조회 결과는 기본 분류로 사용하지 않는다.
+
+```
+python -m pipeline.toss_classify --dry-run --max-sectors 3
+python -m pipeline.toss_classify
+```
+
+공식 명세 확인 버전: 1.2.24
+https://openapi.tossinvest.com/openapi-docs/latest/openapi.json

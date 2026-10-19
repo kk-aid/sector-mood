@@ -155,6 +155,9 @@ def calculate(rows, mkt, frames, resolved, etf=False):
         x = metrics(f, b)
         if x is not None:
             x.update(benchmark=BENCH[key][0], group=key, asset="ETF" if etf else "주식", day=b.index[-1].date().isoformat())
+            from .taxonomy import profile
+            display_code = code.rsplit('.', 1)[0] if etf and mkt == 'kr' else code
+            x['classification'] = profile({**r, 'name':display_code}, mkt, asset='etf' if etf else 'stock')
             results[code] = x
     for group in {v["group"] for v in results.values()}:
         members = {k: v for k, v in results.items() if v["group"] == group}
@@ -181,6 +184,11 @@ def brief(x):
         parts.append(f"MTT {x['mtt']}/8")
     if x["line_nh"]:
         parts.append("RS선 63일 신고가")
+    cls = x.get('classification') or {}
+    if cls.get('source') == 'toss':
+        parts.append('분류 ' + ' › '.join(z for z in (cls.get('sector'), cls.get('industry'), cls.get('subindustry')) if z))
+    elif cls.get('toss_ambiguous'):
+        parts.append('토스 복수 업종')
     parts += [x["flow"], x["benchmark"]]
     return " · ".join(parts)
 
