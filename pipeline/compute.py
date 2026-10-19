@@ -99,10 +99,14 @@ class Engine:
                          'sector': row['sector']}, mkt, reviewed=reviewed)
             source = p['source']
             self.classification_counts[source] = self.classification_counts.get(source, 0) + 1
+            if source == 'reviewed':
+                canonical = {v: k for k, v in config.SECTOR_KO.items()}.get(p['sector'], p['sector'])
+                if canonical in config.SECTOR_KO:
+                    self.meta.at[ticker, 'sector'] = canonical
             if source in ('toss', 'reviewed'):
                 label = p.get('subindustry') or p['industry']
                 self.meta.at[ticker, 'industry'] = label
-                self.meta.at[ticker, 'industry_en'] = f"{source}:{row['sector']}:{p['industry']}:{label}"
+                self.meta.at[ticker, 'industry_en'] = f"{source}:{self.meta.at[ticker, 'sector']}:{p['industry']}:{label}"
         if mkt == "kr":                                   # '유한양행보통주' → '유한양행'
             self.meta["name"] = self.meta["name"].astype(str).str.replace(r"\s*보통주$", "", regex=True)
         self.A, self.C, self.V = A[cols], C[cols], V[cols].fillna(0)

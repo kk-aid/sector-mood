@@ -50,3 +50,15 @@ class SiteClassificationTests(unittest.TestCase):
             self.assertEqual(out['follow'][0]['label'],'반도체')
             self.assertEqual(out['cum5'],{'반도체':1})
             self.assertEqual(json.loads((root/'index.json').read_text())['counts']['2026-10-19'],{'반도체':1})
+
+    def test_reviewed_primary_business_corrects_sector_too(self):
+        uni, A, C, V = synthetic.make(n_days=260, seed=3)
+        ticker = uni[0]['ticker']
+        reviewed = {('us', ticker): {'sector':'Consumer Services', 'industry':'호텔·레저',
+                    'subindustry':'관광호텔', 'themes':'부동산개발',
+                    'source_url':'https://kind.krx.co.kr/', 'reviewed_on':'2026-10-19'}}
+        with patch('pipeline.taxonomy.reviewed_rows', return_value=reviewed), patch('pipeline.taxonomy.toss_rows',return_value=({},None)):
+            eng = Engine(uni, A, C, V)
+        self.assertEqual(eng.meta.at[ticker, 'sector'], 'Consumer Services')
+        self.assertEqual(eng.meta.at[ticker, 'industry'], '관광호텔')
+        self.assertEqual(eng.classification_counts['reviewed'], 1)

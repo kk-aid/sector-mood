@@ -70,7 +70,9 @@ def profile(row, market, legacy=None, reviewed=None, asset="stock"):
                        subindustry=by_depth.get(2), source='toss', status='provider_classified',
                        source_url='https://developers.tossinvest.com/docs', reviewed_on=None)
     if approved:
-        out.update(sector=approved.get('sector') or sector, industry=approved['industry'],
+        approved_sector = approved.get('sector') or sector
+        approved_sector = config.SECTOR_KO.get(approved_sector, approved_sector)
+        out.update(sector=approved_sector, industry=approved['industry'],
                    subindustry=approved.get('subindustry') or None,
                    themes=[x.strip() for x in approved.get('themes', '').split('|') if x.strip()],
                    source='reviewed', source_url=approved['source_url'],
