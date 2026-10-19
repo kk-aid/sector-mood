@@ -977,7 +977,7 @@ function nhClassification(st){
   const path = [...new Set([c.sector,c.industry,c.subindustry].filter(x=>x && x!=="미분류"))];
   const memberships = (c.toss_memberships||[]).map(p=>p.map(x=>x.name).join(" › "));
   const br = c.business_review, f = br?.financial_basis;
-  const evidence = br ? `<details style="margin-top:4px"><summary>사업 분류 근거 · ${esc(f?.period_end||c.reviewed_on)}</summary>${esc(br.notes||"")}<br>${f?.share_pct!=null ? `확인된 제품·부문 매출 비중 ${esc(f.share_pct)}%<br>` : esc(f?.basis||"")}${(br.sources||[]).map((s,i)=>`<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">공식 원문 ${i+1}</a> · ${esc(s.locator||"")}`).join("<br>")}</details>` : "";
+  const evidence = br ? `<details style="margin-top:4px"><summary>사업 분류 근거 · ${esc(f?.period_end||c.reviewed_on)}</summary>${esc(br.notes||"")}<br>${f?.share_pct!=null ? `${esc(f.segment||"공시 보고 부문")} 매출 비중 ${esc(f.share_pct)}%<br>` : esc(f?.basis||"")}${(br.sources||[]).map((s,i)=>`<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">공식 원문 ${i+1}</a> · ${esc(s.locator||"")}`).join("<br>")}</details>` : "";
   return `<span>${esc(c.source==="toss" && memberships.length>1 ? "복수 소속" : path.join(" › ") || st.label)} · ${esc(source)}</span>` +
     (memberships.length ? `<div style="margin-top:4px;color:var(--ink3)">토스 소속: ${memberships.map(esc).join(" / ")}${c.toss_ambiguous?" · 각 소속 업종에 포함":""}</div>` : "") + evidence;
 }
