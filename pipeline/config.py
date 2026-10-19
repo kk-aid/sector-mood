@@ -164,3 +164,36 @@ INDUSTRY_KO = {
     "Trucks/Construction/Farm Machinery": "건설·농기계", "Water Utilities": "수도",
     "Wholesale Distributors": "도매", "Wireless Telecommunications": "무선통신",
 }
+
+# ── 주간 요약 (pipeline/weekly.py) ──────────────────────
+# 실제 지수·ETF 는 yfinance 심볼. 첫 항목이 시장 카드의 대표 벤치마크.
+WEEKLY_BENCH = {
+    "kr": [("코스피", "^KS11"), ("코스닥", "^KQ11")],
+    "jp": [("닛케이225", "^N225"), ("TOPIX ETF 1306", "1306.T")],
+    "us": [("S&P500", "^GSPC"), ("나스닥100", "^NDX"), ("S&P500 동일가중 RSP", "RSP")],
+}
+WEEKLY_ETFS = {
+    "kr": [("KODEX 200", "069500.KS"), ("KODEX 코스닥150", "229200.KS"), ("KODEX 반도체", "091160.KS"),
+           ("KODEX IT", "266370.KS"), ("TIGER 200 중공업", "139230.KS"), ("KODEX 기계장비", "102960.KS"),
+           ("KODEX 건설", "117700.KS"), ("KODEX 증권", "102970.KS"), ("KODEX 은행", "091170.KS"),
+           ("KODEX 자동차", "091180.KS"), ("TIGER 2차전지테마", "305540.KS"), ("KODEX 바이오", "244580.KS"),
+           ("KODEX 헬스케어", "266420.KS"), ("KODEX 필수소비재", "266410.KS"), ("KODEX 운송", "140710.KS")],
+    "jp": [("TOPIX 1306", "1306.T"), ("닛케이225 1321", "1321.T"),
+           ("TOPIX-17 식품", "1617.T"), ("TOPIX-17 에너지자원", "1618.T"), ("TOPIX-17 건설·자재", "1619.T"),
+           ("TOPIX-17 소재·화학", "1620.T"), ("TOPIX-17 의약품", "1621.T"), ("TOPIX-17 자동차·수송기", "1622.T"),
+           ("TOPIX-17 철강·비철", "1623.T"), ("TOPIX-17 기계", "1624.T"), ("TOPIX-17 전기·정밀", "1625.T"),
+           ("TOPIX-17 정보통신·서비스", "1626.T"), ("TOPIX-17 전력·가스", "1627.T"), ("TOPIX-17 운수·물류", "1628.T"),
+           ("TOPIX-17 상사·도매", "1629.T"), ("TOPIX-17 소매", "1630.T"), ("TOPIX-17 은행", "1631.T"),
+           ("TOPIX-17 금융(은행 제외)", "1632.T"), ("TOPIX-17 부동산", "1633.T")],
+    "us": [("필수소비재 XLP", "XLP"), ("에너지 XLE", "XLE"), ("소매 XRT", "XRT"), ("헬스케어 XLV", "XLV"),
+           ("소재 XLB", "XLB"), ("유틸리티 XLU", "XLU"), ("금융 XLF", "XLF"), ("부동산 XLRE", "XLRE"),
+           ("방산 ITA", "ITA"), ("지역은행 KRE", "KRE"), ("S&P500 동일가중 RSP", "RSP"), ("주택건설 XHB", "XHB"),
+           ("커뮤니케이션 XLC", "XLC"), ("운송 IYT", "IYT"), ("임의소비재 XLY", "XLY"), ("산업재 XLI", "XLI"),
+           ("금광 GDX", "GDX"), ("S&P500 SPY", "SPY"), ("태양광 TAN", "TAN"), ("나스닥100 QQQ", "QQQ"),
+           ("바이오 XBI", "XBI"), ("소프트웨어 IGV", "IGV"), ("기술 XLK", "XLK"), ("ARK 혁신 ARKK", "ARKK"),
+           ("우라늄 URA", "URA"), ("반도체 SMH", "SMH")],
+}
+WEEKLY_INDUSTRY_MIN_N = 3          # 강·약 산업과 3국 공통 업종에 넣을 산업 최소 종목 수
+WEEKLY_TOP = 8                     # 강·약 산업, 3국 공통 업종 표시 개수
+WEEKLY_MOVERS = 10                 # 시총 증감 상위 종목 수
+WEEKLY_REBUILD = 2                 # 매 실행 때 다시 만드는 최근 주 수 (데이터 없으면 전체 이력 백필)

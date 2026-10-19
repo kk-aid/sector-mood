@@ -13,6 +13,8 @@ GitHub Actions가 평일 두 번 데이터를 수집·계산하고, GitHub Pages
 
 | 보기 | 내용 | 데이터 |
 |---|---|---|
+| 매크로 | 환율·미국채 금리·신용 스프레드(FRED)·채권 ETF·원자재·크립토·변동성·글로벌 지수: 1일~1년 변화, 52주 위치, 6개월 추이 | `macro.json` |
+| 주간 요약 | 숫자로 본 한 주: 3국 카드(실제 지수 요일별 막대·재구성 시총가중·동일가중·가운데 종목·오른 종목 비율·초대형 10), 3국 공통 강세·약세 산업, 시장별 시총 증감 상위 10, 강·약 산업, 규모별, 업종·테마 ETF | `weekly/<월요일>.json` |
 | 심리 지도 | 섹터·산업별 요일 판정, 섹터 ▸ 로 산업 펼치기, 칸 누르면 종목, 규모와 쏠림 | `weeks/<월요일>.json` |
 | 3국 비교 | 같은 섹터·산업의 미·한·일 주간 판정 나란히, 공통 강세·약세·엇갈림 표시 | `history.json` ×3 |
 | 로테이션 | RS 추세 × RS 모멘텀 4분면(선도·약화·소외·개선)과 4~12주 꼬리 | `history.json` |
@@ -96,6 +98,8 @@ pipeline/
   universe.py   TradingView 스크리너로 유니버스 구성 (월 1회 고정, 실패 시 지난달 재사용, 종목명·산업명 한글)
   prices.py     yfinance 일봉 2년치 수집 (한국은 .KS 실패 시 .KQ 재시도)
   compute.py    섹터·산업 지표, 규모와 쏠림, 시총 증감 → docs/data/<시장>/weeks/YYYY-MM-DD.json
+  macro.py      매크로 대시보드 (yfinance + FRED CSV, 키 불필요) → docs/data/macro.json
+  weekly.py     주간 요약 (각 시장 주간 파일 + 실제 지수·ETF 종가) → docs/data/weekly/<월요일>.json
   analytics.py  주간 이력·로테이션·신호 검증·추세(이평 배열/Stage/Minervini/breadth) → history/signals/trend.json
   run.py        실행 진입점
   newhigh.py    신고가 알림 (TradingView 스크리너 조회 → 판정 → 기록 → 텔레그램)
@@ -166,3 +170,12 @@ python -m tests.test_analytics                 # 분석 검증 (이력·산업·
 cd docs && python -m http.server               # http://localhost:8000
 ```
 합성 데이터로 테스트한 뒤에는 `docs/data/` 를 지우고 커밋해야 함. 그래야 첫 Actions 실행이 실제 백필을 함.
+
+## 주간 요약 메모
+- 실제 지수·ETF 목록은 `pipeline/config.py` 의 `WEEKLY_BENCH`·`WEEKLY_ETFS` 에서 바꿈 (yfinance 심볼).
+- 업종 심리 갱신이 돌 때마다 최근 2주를 다시 만듦. 미국 금요일 장이 토요일 아침에 들어오면 그 주가 완성됨.
+- 문장(제목·메모)은 숫자에서 규칙으로 만든 사실 문장이며 해석·전망은 넣지 않음.
+- 추가 칸: 지수 기여도(종목·섹터), 폭·쏠림(50일선 위·신고가−신저가·거래대금 상위 10 몫), 달러 기준 수익률, 이번 주 매크로,
+  지난주 강·약 산업의 이번 주, 연속 시장 상회·하회, 로테이션 분면 이동, 신고가 주간 결산, 내 테마 바스켓(labels.csv).
+- 기여도는 '주 시작 시총 비중 × 주간 수익률' 근사라 일별 재가중 지수와 소수점 차이가 있음.
+- 한국 투자자별 순매수는 데이터 소스가 없어 빠져 있음.

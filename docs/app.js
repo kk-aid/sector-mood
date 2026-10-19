@@ -17,6 +17,8 @@ const DESC = {
   rrg: "가로 = RS 추세(시장 대비 강도 ÷ 최근 10주 평균, 100 위면 평균보다 강함), 세로 = RS 모멘텀(RS 추세의 4주 변화, 100 위면 개선 중). 보통 개선 → 선도 → 약화 → 소외 순으로 시계 방향으로 돈다.",
   streak: "업종별 최근 12주 주간 판정 띠. 같은 판정이 이어지는 주 수(연속)를 보면 일회성 반짝인지 지속되는 흐름인지 구분할 수 있음.",
   trend: "종목별 이평 배열(일봉 5·20·60·120·200, 주봉 10·20·30·40), Weinstein Stage(30주선), Minervini 트렌드 템플릿 8조건과 업종 breadth(이평선 위 비율, 52주 신고가·신저가). 최신 거래일 기준 스냅샷.",
+  macro: "환율·미국채 금리·신용 스프레드·채권 ETF·원자재·크립토·변동성·글로벌 지수. 금리·스프레드 변화는 bp, VIX 류는 포인트, 나머지는 %. 52주 위치는 최근 1년 범위에서 지금 값이 어디쯤인지(0=저점, 100=고점).",
+  weekly: "한 주를 숫자로 요약. 위쪽은 세 나라 비교(실제 지수, 이 사이트 유니버스로 재구성한 시총가중·동일가중, 가운데 종목, 오른 종목 비율), 아래는 위에서 고른 시장의 상세(시총 증감 종목, 규모별, 강·약 산업, 업종 ETF). 문장은 숫자에서 규칙으로 만든 것이며 해석이 아님.",
   newhigh: "그날 상승·양봉 마감하며 장중 52주·역대 신고가를 낸 종목. 같은 섹터 라벨에 몰리면 군집으로 묶고, 종목마다 1년 차트·최근 공시·뉴스 헤드라인을 붙임. 재료는 '그날 나온 소식 목록'이지 원인 확정이 아님.",
   signal: "과거 판정이 다음 기간 시장 대비 성과와 연결되는지 집계한 것. 위의 가중·등락 기준·거래 기준·단위 선택을 그대로 따름. 표본·중첩·비용 한계는 아래 주의 사항 참고.",
 };
@@ -25,6 +27,7 @@ let S = load(), MKT = "us", VIEW = "map", WEEK = null, SECF = "";
 let MARKETS = [{key:"us", label:"미국", flag:"🇺🇸"}], INDEX = null, W = null;
 let cache = {}, sortCol = "week", drill = null, expanded = new Set(), rrgSel = null;
 let crossSort = "avg", trendF = {f:"all", sector:null, d:null, w:null};
+let WKSEL = null, wkTab = "kr";
 let NHDAY = null, nhF = {kind:"all", label:"", cluster:false}, followSort = -1;
 
 /* ── 유틸 ─────────────────────────────── */
@@ -99,7 +102,7 @@ function hIndex(H, key){
 const hObj = (g, i) => i < 0 ? null : {rc:g.rc[i], re:g.re[i], sc:g.sc[i], se:g.se[i], tv:g.tv[i], vr:g.vr[i]};
 
 /* ── 라우팅 ────────────────────────────── */
-function setHash(){ history.replaceState(null, "", `#${MKT}/${VIEW}/${(VIEW==="newhigh" ? NHDAY : WEEK)||""}`); }
+function setHash(){ history.replaceState(null, "", `#${MKT}/${VIEW}/${(VIEW==="newhigh" ? NHDAY : VIEW==="weekly" ? WKSEL : WEEK)||""}`); }
 function parseHash(){
   const p = location.hash.slice(1).split("/").filter(Boolean);
   const out = {};
@@ -116,6 +119,7 @@ async function init(){
   const h = parseHash();
   if(h.view) VIEW = h.view;
   if(VIEW==="newhigh" && h.week) NHDAY = h.week;
+  if(VIEW==="weekly" && h.week) WKSEL = h.week;
   $("#mtabs").innerHTML = MARKETS.length > 1 ? MARKETS.map(m => `<button data-m="${m.key}">${m.flag} ${m.label}</button>`).join("") : "";
   const keys = MARKETS.map(m => m.key);
   await openMarket(keys.includes(h.mkt) ? h.mkt : keys[0], h.week);
@@ -125,6 +129,8 @@ async function openMarket(key, week){
   MKT = key;
   document.querySelectorAll("#mtabs button").forEach(b => b.classList.toggle("on", b.dataset.m===key));
   INDEX = await tryJSON(`data/${MKT}/index.json`);
+  if(!INDEX && VIEW==="macro"){ $("#meta").textContent = ""; syncControls(); await renderMacro(); return; }
+  if(!INDEX && VIEW==="weekly"){ $("#meta").textContent = ""; syncControls(); await renderWeekly(); return; }
   if(!INDEX && VIEW==="newhigh"){ $("#meta").textContent = ""; syncControls(); setHash(); await renderNewhigh(); return; }
   if(!INDEX){
     $("#meta").textContent = "";
@@ -165,6 +171,8 @@ function syncControls(){
 
 async function render(){
   if(VIEW==="newhigh"){ syncControls(); setHash(); await renderNewhigh(); return; }
+  if(VIEW==="weekly"){ syncControls(); await renderWeekly(); return; }
+  if(VIEW==="macro"){ syncControls(); setHash(); await renderMacro(); return; }
   if(!W) return;
   syncControls(); setHash();
   const fn = {map:renderMap, cross:renderCross, rrg:renderRRG, streak:renderStreak, trend:renderTrend, signal:renderSignal}[VIEW];
@@ -708,6 +716,11 @@ $("#vtabs").addEventListener("click", e => {
 });
 $("#view").addEventListener("click", async e => {
   const t = e.target;
+  if(VIEW==="weekly"){
+    const wt = t.closest("[data-wkt]");
+    if(wt){ wkTab = wt.dataset.wkt; const y = window.scrollY; await render(); window.scrollTo(0, y); }
+    return;
+  }
   if(VIEW==="newhigh"){
     const nb = t.closest("[data-nh]");
     if(nb){ const k = nb.dataset.nh; if(k==="cluster") nhF.cluster = !nhF.cluster; else nhF[k] = nb.dataset.nv; render(); return; }
@@ -749,6 +762,207 @@ $("#stocks").addEventListener("click", e => {
 $("#close").onclick = closeDrill;
 $("#sheet").addEventListener("click", e => { if(e.target.id==="sheet") closeDrill(); });
 document.addEventListener("keydown", e => { if(e.key==="Escape" && drill) closeDrill(); });
+
+/* ══ 10. 매크로 ════════════════════════════ */
+const KUNIT = {pct:"%", bp:"bp", pt:"pt"};
+function mchg(kind, now, then){
+  if(now==null || then==null) return null;
+  return kind==="pct" ? (then ? (now/then-1)*100 : null) : kind==="bp" ? (now-then)*100 : now-then;
+}
+const mfmt = (v, kind) => v==null ? "–" : `${v>0?"+":v<0?"−":""}${Math.abs(v).toFixed(kind==="bp"?0:kind==="pt"?2:2)}${KUNIT[kind]}`;
+const mscale = {pct:6, bp:40, pt:5};
+function mlast(it){
+  const v = it.last; if(v==null) return "–";
+  if(it.kind==="bp") return v.toFixed(2)+"%";
+  const a = Math.abs(v);
+  return a >= 1000 ? Math.round(v).toLocaleString() : a >= 100 ? v.toFixed(1) : v.toFixed(2);
+}
+function mspark(arr, w=120, h=28){
+  const v = (arr||[]).filter(x => x!=null); if(v.length < 3) return "";
+  const lo = Math.min(...v), hi = Math.max(...v), r = hi-lo || 1;
+  const d = v.map((x,i) => `${i?"L":"M"}${(i/(v.length-1)*w).toFixed(1)},${(h-2-(x-lo)/r*(h-4)).toFixed(1)}`).join("");
+  return `<svg class="mspark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"><path d="${d}" fill="none" stroke="var(--accent)" stroke-width="1.3"/></svg>`;
+}
+function macroWeek(M, week){
+  // 주간 요약용: 그 주(월요일 키) 마지막 값 vs 직전 주 마지막 값
+  const out = {};
+  for(const g of M.groups) for(const it of g.items){
+    const ks = Object.keys(it.wk||{}).sort(), i = ks.indexOf(week);
+    if(i > 0) out[it.sym] = {...it, w: mchg(it.kind, it.wk[ks[i]], it.wk[ks[i-1]]), wv: it.wk[ks[i]]};
+  }
+  return out;
+}
+async function renderMacro(){
+  const M = await tryJSON("data/macro.json");
+  if(!M){ $("#view").innerHTML = `<div class="card"><div class="empty-state">매크로 데이터가 아직 없음. 업종 심리 지도 갱신이 한 번 돌면 생성됨.</div></div>`; return; }
+  const cols = [["d1","1일"],["w1","1주"],["m1","1개월"],["m3","3개월"],["ytd","연초 대비"],["y1","1년"]];
+  let h = `<div class="bar" style="margin-top:0"><span class="tag">갱신 ${esc(M.generated)}</span>${M.missing?.length?`<span class="tag" title="${esc(M.missing.join(", "))}">못 받은 지표 ${M.missing.length}개</span>`:""}</div>
+    <div class="mac-grid">`;
+  for(const g of M.groups){
+    h += `<div class="card mac-card"><h3>${esc(g.name)}</h3><div class="scroll"><table class="tbl mac"><thead><tr><th class="l">지표</th><th>현재</th>${cols.map(c => `<th>${c[1]}</th>`).join("")}<th class="l">52주 위치</th><th class="l">6개월</th></tr></thead><tbody>`;
+    for(const it of g.items){
+      const sc = mscale[it.kind];
+      h += `<tr><td class="l"><b>${esc(it.name)}</b><small>${esc(it.sym)} · ${esc(md(it.date))}</small></td><td class="mono"><b>${mlast(it)}</b></td>` +
+        cols.map(([k]) => { const v = it.chg[k]; return `<td class="mono" style="${heat(v, k==="d1"?sc/3:k==="w1"?sc/1.5:sc*1.5)}">${mfmt(v, it.kind)}</td>`; }).join("") +
+        `<td class="l"><div class="pos52" title="${esc(`1년 범위 ${it.lo52} ~ ${it.hi52}`)}"><i style="left:${it.pos52??50}%"></i></div></td><td class="l">${mspark(it.spark)}</td></tr>`;
+    }
+    h += `</tbody></table></div></div>`;
+  }
+  h += `</div><p class="foot">출처: yfinance(야후 파이낸스) 종가, 미 2년·10년−2년·신용 스프레드는 FRED(ICE BofA OAS). 선물은 근월물 연속, 장 마감 시각이 지표마다 달라 같은 날짜라도 시점이 다를 수 있음.</p>`;
+  $("#view").innerHTML = h;
+}
+
+/* ══ 9. 주간 요약 ══════════════════════════ */
+const pc = (x, d=2) => x==null ? "–" : `${x>0?"+":x<0?"−":""}${Math.abs(x).toFixed(d)}%`;
+const pcls = x => x==null ? "" : x>0 ? "pos" : x<0 ? "neg" : "";
+function hbars(items, {val, label, sub, max, fmtv = v => pc(v), cls = ""}){
+  if(!items.length) return `<div class="empty-state" style="padding:24px">해당 없음</div>`;
+  const mx = max || Math.max(...items.map(x => Math.abs(val(x)||0)), 0.01);
+  return `<div class="hb ${cls}">` + items.map(x => { const v = val(x) || 0, w = Math.min(Math.abs(v)/mx, 1)*100;
+    return `<div class="hb-r"><div class="hb-l"><b>${esc(label(x))}</b>${sub?`<small>${sub(x)}</small>`:""}</div>
+      <div class="hb-b"><i class="${v>=0?"up":"dn"}" style="width:${w.toFixed(1)}%"></i></div><div class="hb-v mono ${pcls(v)}">${fmtv(v)}</div></div>`; }).join("") + `</div>`;
+}
+function dayBars(b, scale){
+  const days = b.days, bench = b.bench[0], W0 = 300, H0 = 150, pad = 18, bw = (W0-20)/days.length;
+  const y = v => H0/2 - v/scale*(H0/2-pad);
+  let s = `<svg viewBox="0 0 ${W0} ${H0}" class="wkbars">`;
+  for(const g of [scale, scale/2, 0, -scale/2, -scale]) s += `<line x1="16" x2="${W0}" y1="${y(g)}" y2="${y(g)}" stroke="${g?"var(--line2)":"var(--ink3)"}" stroke-width="${g?1:.8}"/><text x="13" y="${y(g)+3}" text-anchor="end" font-size="8" fill="var(--ink3)">${g>0?"+":""}${+g.toFixed(1)}</text>`;
+  days.forEach((d,i) => {
+    const x = 20 + i*bw + bw*.2, w = bw*.6, v = bench?.days?.[d], r = b.recon.days?.[d];
+    if(v!=null){ const t = Math.max(-scale, Math.min(scale, v)); s += `<rect x="${x}" y="${Math.min(y(0),y(t))}" width="${w}" height="${Math.abs(y(t)-y(0))}" fill="${v>=0?"var(--up)":"var(--dn)"}" opacity=".85"><title>${esc(`${d} ${bench.name} ${pc(v)}`)}</title></rect>`;
+      s += `<text x="${x+w/2}" y="${v>=0? y(t)-3 : y(t)+9}" text-anchor="middle" font-size="8" class="mono" fill="var(--ink2)">${v>0?"+":""}${v.toFixed(2)}</text>`; }
+    if(r!=null){ const t = Math.max(-scale, Math.min(scale, r)); s += `<circle cx="${x+w/2}" cy="${y(t)}" r="2.6" fill="var(--ink)" stroke="var(--panel)" stroke-width="1"><title>${esc(`${d} 재구성 ${pc(r)}`)}</title></circle>`; }
+    s += `<text x="${x+w/2}" y="${H0-2}" text-anchor="middle" font-size="8" fill="var(--ink3)">${md(d)} ${WD[new Date(d+"T00:00:00Z").getUTCDay()-1]||""}</text>`;
+  });
+  return s + `</svg>`;
+}
+
+async function renderWeekly(){
+  const WI = await tryJSON("data/weekly/index.json");
+  if(!WI || !WI.weeks?.length){ $("#view").innerHTML = `<div class="card"><div class="empty-state">주간 요약이 아직 없음. 업종 심리 지도 갱신이 한 번 돌면 생성됨.</div></div>`; return; }
+  if(!WKSEL || !WI.weeks.includes(WKSEL)) WKSEL = WI.weeks.includes(WEEK) ? WEEK : WI.weeks[WI.weeks.length-1];
+  setHash();
+  const R = await getJSON(`data/weekly/${WKSEL}.json`);
+  const ms = R.markets;
+  const MAC = await tryJSON("data/macro.json");
+  const MW = MAC ? macroWeek(MAC, WKSEL) : {};
+  const fx = {kr: MW["KRW=X"]?.w, jp: MW["JPY=X"]?.w};
+  const main = b => b.bench[0]?.week ?? b.recon.cw;
+  const scale = Math.max(3, Math.ceil(Math.max(...ms.flatMap(m => [...Object.values(R.blocks[m].bench[0]?.days||{}), ...Object.values(R.blocks[m].recon.days||{})]).filter(v => v!=null).map(Math.abs), 0)));
+  const opts = WI.weeks.slice().reverse().map(w => `<option value="${w}"${w===WKSEL?" selected":""}>${md(w)}(월) 주</option>`).join("");
+  let h = `<div class="bar" style="margin-top:0"><div class="grp"><label>주</label><select id="wksel">${opts}</select></div><span class="tag">갱신 ${esc(R.generated||"")}</span></div>
+    <div class="wk-kicker">숫자로 본 한 주</div><h2 class="wk-head">${esc(R.headline||"")}</h2>
+    <p class="sdesc">막대는 각 시장 실제 지수(${ms.map(m => esc(R.blocks[m].bench[0]?.name||"재구성")).join("·")})의 요일별 등락, 점은 이 사이트 유니버스로 재구성한 시총가중 등락. 세 나라를 같은 눈금(±${scale}%)에 그림.</p>
+    <div class="wk-cards">`;
+  for(const m of ms){
+    const b = R.blocks[m], v = main(b), sz = b.size || [];
+    const row = (l, x, cls="") => `<tr><td class="l">${l}</td><td class="mono ${cls}">${x}</td></tr>`;
+    h += `<div class="card wk-card"><div class="wk-mk"><span class="tag">${m.toUpperCase()}</span> <b>${esc(b.label)}</b></div>
+      <div class="wk-big mono ${pcls(v)}">${pc(v)}</div><div class="wk-sub">${esc(b.bench[0]?.name || "재구성 (실제 지수 없음)")} 주간</div>
+      ${dayBars(b, scale)}
+      <table class="wk-t">${row("벤치마크 (재구성 시총가중)", pc(b.recon.cw), pcls(b.recon.cw))}${row("동일가중", pc(b.recon.ew), pcls(b.recon.ew))}
+        ${row("가운데 종목", pc(b.median), pcls(b.median))}${row("주간 오른 종목", b.up_pct==null?"–":b.up_pct+"%")}
+        ${sz[0]?row(`${esc(sz[0].label)} 묶음`, pc(sz[0].cw), pcls(sz[0].cw)):""}${row("대상 종목 수", b.n.toLocaleString())}
+        ${b.bench.slice(1).map(x => row(esc(x.name), pc(x.week), pcls(x.week))).join("")}
+        ${fx[m]!=null && v!=null ? row(`달러 기준 <small>(${m==="kr"?"원":"엔"}/달러 ${pc(fx[m])})</small>`, pc(((1+v/100)/(1+fx[m]/100)-1)*100), pcls(((1+v/100)/(1+fx[m]/100)-1)*100)) : ""}
+        ${(() => { const br = b.breadth || {}; let x = "";
+          if(br.a50!=null) x += row("50일선 위 종목", `${br.a50.toFixed(0)}% <small class="${pcls(br.a50_prev!=null?br.a50-br.a50_prev:null)}">${br.a50_prev!=null?fmt(br.a50-br.a50_prev,0)+"p":""}</small>`);
+          if(br.nhl!=null) x += row("52주 신고가 − 신저가 (주)", `${br.nhl>0?"+":""}${br.nhl}`, pcls(br.nhl));
+          if(br.conc!=null) x += row("거래대금 상위 10 몫", br.conc.toFixed(1)+"%");
+          if(br.tv!=null) x += row("시장 거래대금 (20일 평균 대비)", br.tv.toFixed(2)+"배");
+          return x; })()}</table>
+      <ul class="wk-notes">${(b.notes||[]).map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>`;
+  }
+  h += `</div>`;
+
+  // 이번 주 매크로
+  const KEYM = [["KRW=X","원/달러"],["JPY=X","엔/달러"],["DX-Y.NYB","달러인덱스"],["^TNX","미 10년"],["BAMLH0A0HYM2","HY 스프레드"],["^VIX","VIX"],["CL=F","WTI"],["GC=F","금"],["HG=F","구리"],["BTC-USD","비트코인"]];
+  const chips = KEYM.filter(([s]) => MW[s]).map(([s,l]) => { const x = MW[s];
+    return `<div class="mchip"><span>${l}</span><b class="mono ${pcls(x.w)}">${mfmt(x.w, x.kind)}</b><small class="mono">${x.kind==="bp"?x.wv.toFixed(2)+"%":Math.abs(x.wv)>=1000?Math.round(x.wv).toLocaleString():x.wv.toFixed(2)}</small></div>`; }).join("");
+  if(chips) h += `<div class="wk-kicker" style="margin-top:24px">이번 주 매크로</div><div class="mchips">${chips}</div><p class="foot" style="margin-top:6px">주간 마지막 값 대비 전주 마지막 값. 금리·스프레드는 bp, VIX 는 포인트. 전체는 '매크로' 탭.</p>`;
+
+  // 3국 공통 업종
+  const C = R.common, nm = C.markets.length;
+  if(nm >= 2){
+    const sub = x => C.markets.map(m => `${SHORTM[m]} ${pc(x.by[m],1)}`).join(" · ");
+    h += `<div class="wk-kicker" style="margin-top:28px">${nm}국 공통 업종</div><p class="sdesc">${nm}국 모두에서 시장보다 강하거나 약했던 산업(각 시장 ${3}종목 이상). 막대는 ${nm}국 시장 대비 수익률의 평균(%p).</p>
+      <div class="wk-two"><div class="card wk-pane"><h3>${nm}국 공통 강세</h3>${hbars(C.strong, {val:x=>x.avg, label:x=>x.name, sub, fmtv:v=>pc(v)+"p"})}</div>
+      <div class="card wk-pane"><h3>${nm}국 공통 약세</h3>${hbars(C.weak, {val:x=>x.avg, label:x=>x.name, sub, fmtv:v=>pc(v)+"p"})}</div></div>`;
+  }
+
+  // 테마 바스켓
+  const TH = R.themes || [];
+  if(TH.length){
+    const shown = TH.length > 20 ? [...TH.slice(0,10), null, ...TH.slice(-10)] : TH;
+    h += `<div class="wk-kicker" style="margin-top:28px">내 테마 바스켓</div><p class="sdesc"><code>data/newhigh/labels.csv</code> 의 테마 라벨별 주간 동일가중 수익률. 유니버스(시총 하한 이상)에 있는 종목만 계산하므로 '계산/등록' 종목 수를 같이 봐야 함. 상위·하위 10개.</p>
+      <div class="card"><div class="scroll"><table class="tbl"><thead><tr><th class="l">테마</th><th>계산/등록</th>${ms.map(m => `<th>${SHORTM[m]}</th>`).join("")}<th>평균</th><th>중앙값</th><th>오른 종목</th></tr></thead><tbody>` +
+      shown.map(t => t===null ? `<tr><td colspan="${6+ms.length}" class="ctr" style="color:var(--ink3)">⋯ ${TH.length-20}개 생략 ⋯</td></tr>` :
+        `<tr><td class="l"><b>${esc(t.label)}</b></td><td class="mono">${t.n}/${t.listed}</td>` + ms.map(m => { const x = t.by[m]; return `<td class="mono ${x?pcls(x.avg):""}">${x?`${pc(x.avg,1)} <small style="color:var(--ink3)">${x.n}</small>`:"·"}</td>`; }).join("") +
+        `<td class="mono ${pcls(t.avg)}" style="${heat(t.avg, 8)}"><b>${pc(t.avg)}</b></td><td class="mono ${pcls(t.med)}">${pc(t.med)}</td><td class="mono">${t.up}%</td></tr>`).join("") +
+      `</tbody></table></div></div>`;
+  }
+
+  // 시장 상세
+  if(!ms.includes(wkTab)) wkTab = ms.includes(MKT) ? MKT : ms[0];
+  const b = R.blocks[wkTab], cur = b.currency;
+  h += `<div class="wk-detail-h"><div class="wk-kicker" style="margin:0">시장 상세</div><div class="mtabs" style="margin:0">${ms.map(m => `<button data-wkt="${m}" class="${m===wkTab?"on":""}">${R.blocks[m].flag} ${esc(R.blocks[m].label)}</button>`).join("")}</div></div>`;
+  const mvsub = x => `${esc(x.ind||"")} · 시총 ${moneyDelta(x.dmcap)}${cur==="달러"?"달러":cur==="원"?"원":"엔"}`;
+  h += `<div class="wk-two"><div class="card wk-pane"><h3>시가총액을 가장 많이 잃은 종목 <small>막대 = 주간 수익률</small></h3>${hbars(b.movers.down, {val:x=>x.week, label:x=>x.name, sub:mvsub})}</div>
+    <div class="card wk-pane"><h3>시가총액을 가장 많이 늘린 종목 <small>막대 = 주간 수익률</small></h3>${hbars(b.movers.up, {val:x=>x.week, label:x=>x.name, sub:mvsub})}</div></div>`;
+  const isub = x => `${x.n}종목 · 시장 대비 ${pc(x.rel)}p`;
+  h += `<div class="wk-two"><div class="card wk-pane"><h3>시장보다 강했던 산업 <small>주간 수익률(막대)</small></h3>${hbars(b.ind_strong, {val:x=>x.ret, label:x=>x.name, sub:isub})}</div>
+    <div class="card wk-pane"><h3>시장보다 약했던 산업 <small>주간 수익률(막대)</small></h3>${hbars(b.ind_weak, {val:x=>x.ret, label:x=>x.name, sub:isub})}</div></div>`;
+  // 지수 기여도
+  const CB = b.contrib;
+  if(CB && CB.total!=null){
+    const csub = x => `${esc(x.ind||"")} · 비중 ${x.w.toFixed(2)}% · 주간 ${pc(x.week,1)}`;
+    const share = (t5, tot) => tot ? ` (${Math.round(t5/tot*100)}%)` : "";
+    h += `<div class="wk-kicker" style="margin-top:24px">지수 기여도</div><p class="sdesc">재구성 시총가중 ${pc(CB.total)}p를 종목별로 나눈 것. 기여 = 주 시작 시총 비중 × 주간 수익률. 끌어내린 상위 5 합계 ${pc(CB.top5_down)}p${CB.total<0?share(CB.top5_down, CB.total):""}, 끌어올린 상위 5 합계 ${pc(CB.top5_up)}p.</p>
+      <div class="wk-two"><div class="card wk-pane"><h3>지수를 끌어내린 종목</h3>${hbars(CB.down, {val:x=>x.c, label:x=>x.name, sub:csub, fmtv:v=>pc(v)+"p"})}</div>
+      <div class="card wk-pane"><h3>지수를 끌어올린 종목</h3>${hbars(CB.up, {val:x=>x.c, label:x=>x.name, sub:csub, fmtv:v=>pc(v)+"p"})}</div></div>
+      <div class="card wk-pane" style="margin-top:12px"><h3>섹터별 기여 <small>합계 ${pc(CB.total)}p</small></h3>${hbars(CB.sectors.slice().sort((a,b)=>a.c-b.c), {val:x=>x.c, label:x=>x.name, fmtv:v=>pc(v)+"p", cls:"two"})}</div>`;
+  }
+
+  // 흐름: 지속·로테이션·연속·신고가
+  h += `<div class="wk-kicker" style="margin-top:24px">흐름</div>`;
+  const PS = b.persist;
+  if(PS){
+    const psub = x => `${x.n}종목 · 지난주 ${pc(x.prev,1)}p → 이번 주 ${x.now==null?"–":pc(x.now,1)+"p"}`;
+    h += `<div class="wk-two"><div class="card wk-pane"><h3>지난주 강했던 산업의 이번 주 <small>${PS.keep_strong}/${PS.strong.length} 지속</small></h3>${hbars(PS.strong, {val:x=>x.now, label:x=>x.name, sub:psub, fmtv:v=>pc(v)+"p"})}</div>
+      <div class="card wk-pane"><h3>지난주 약했던 산업의 이번 주 <small>${PS.keep_weak}/${PS.weak.length} 지속</small></h3>${hbars(PS.weak, {val:x=>x.now, label:x=>x.name, sub:psub, fmtv:v=>pc(v)+"p"})}</div></div>`;
+  }
+  const SU = b.streak_up || [], SD = b.streak_down || [];
+  if(SU.length || SD.length){
+    const ssub = x => `${x.n}종목 · 누적 ${pc(x.cum,1)}p · 이번 주 ${pc(x.now,1)}p`;
+    h += `<div class="wk-two"><div class="card wk-pane"><h3>연속 시장 상회 <small>3주 이상</small></h3>${hbars(SU, {val:x=>x.weeks, label:x=>x.name, sub:ssub, fmtv:v=>v+"주", max:Math.max(6, ...SU.map(x=>x.weeks))})}</div>
+      <div class="card wk-pane"><h3>연속 시장 하회 <small>3주 이상</small></h3>${hbars(SD, {val:x=>-x.weeks, label:x=>x.name, sub:ssub, fmtv:v=>(-v)+"주", max:Math.max(6, ...SD.map(x=>x.weeks))})}</div></div>`;
+  }
+  const MV = b.moves || [];
+  if(MV.length){
+    const qc = {"선도":"var(--s2)","약화":"var(--s3)","소외":"var(--s4)","개선":"var(--dn)"};
+    h += `<div class="card wk-pane" style="margin-top:12px"><h3>로테이션 분면 이동 <small>전주 → 이번 주 · 산업 단위 · 시총가중</small></h3><div class="rmoves">` +
+      MV.map(x => `<div class="rmove"><div class="rmove-h"><span class="qd" style="background:${qc[x.from]}"></span>${esc(x.from)} → <span class="qd" style="background:${qc[x.to]}"></span><b>${esc(x.to)}</b> <small>${x.items.length}</small></div>
+        <div class="rmove-l">${x.items.slice(0,8).map(i => `<span>${esc(i.name)} <small class="mono ${pcls(i.rc)}">${pc(i.rc,1)}p</small></span>`).join("")}${x.items.length>8?`<span style="color:var(--ink3)">외 ${x.items.length-8}</span>`:""}</div></div>`).join("") + `</div></div>`;
+  }
+  const NH = b.newhigh;
+  if(NH && NH.n){
+    const dd = Object.entries(NH.days);
+    const mx = Math.max(1, ...dd.map(([,v])=>v));
+    h += `<div class="card wk-pane" style="margin-top:12px"><h3>신고가 주간 결산 <small>${NH.n}종목 (역대 ${NH.ath} · 52주 ${NH.w52}) · 신고가 기록이 있는 날만</small></h3>
+      <div class="nhw"><div class="nhw-d">${dd.map(([d,v]) => `<div><i style="height:${(v/mx*48).toFixed(0)}px"></i><b class="mono">${v}</b><small>${md(d)}</small></div>`).join("")}</div>
+      <div style="min-width:0;flex:1">${hbars(NH.labels, {val:x=>x.n, label:x=>x.label, sub:x=>esc(x.names.join(", "))+(x.repeat?` · 2회+ ${x.repeat}`:""), fmtv:v=>v+"종목"})}</div></div></div>`;
+  }
+
+  h += `<div class="card wk-pane" style="margin-top:12px"><h3>규모별 주간 수익률</h3><div class="scroll"><table class="tbl"><thead><tr><th class="l">묶음</th><th>주간</th><th>시장 대비</th><th>오른 종목</th></tr></thead><tbody>` +
+    (b.size||[]).map(s => `<tr><td class="l">${esc(s.label)} <small style="color:var(--ink3)">${s.n}</small></td><td class="mono ${pcls(s.cw)}">${pc(s.cw)}</td><td class="mono ${pcls(s.rel)}">${s.rel==null?"–":pc(s.rel)}</td><td class="mono">${s.up==null?"–":s.up+"%"}</td></tr>`).join("") +
+    `</tbody></table></div><p class="sdesc" style="margin:8px 0 0">규모는 연초 시총 순위. 시장 대비 = 묶음 수익률 − 재구성 시총가중 수익률(${pc(b.recon.cw)}).</p></div>`;
+  h += `<div class="card wk-pane" style="margin-top:12px"><h3>업종·테마 ETF 주간 <small>실제 ETF 종가 · ${b.etfs.length}개</small></h3>${hbars(b.etfs, {val:x=>x.week, label:x=>x.name, sub:x=>esc(x.sym), cls:"two"})}</div>`;
+  if(wkTab==="kr") h += `<p class="foot">투자자별 순매수(외국인·기관·개인)는 아직 연결된 데이터 소스가 없어 빠져 있음.</p>`;
+  h += `<p class="foot">재구성 지수는 이 사이트 유니버스(시총 하한 이상 보통주) 기준이라 실제 지수와 다름. 실제 지수·ETF 는 yfinance 종가(배당 조정)이며 받지 못한 날은 비어 있음.</p>`;
+  $("#view").innerHTML = h;
+  $("#wksel").onchange = e => { WKSEL = e.target.value; render(); };
+}
+const SHORTM = {us:"미", jp:"일", kr:"한"};
 
 /* ══ 8. 신고가 ═════════════════════════════ */
 const KIND = {ATH:"역대", "52W":"52주"};

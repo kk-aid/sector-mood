@@ -85,6 +85,11 @@ class Engine:
         if "industry_en" not in self.meta:
             self.meta["industry_en"] = self.meta["industry"]
         self.meta["industry_en"] = self.meta["industry_en"].fillna(self.meta["industry"]).replace("", "Unclassified")
+        # 화면 표시용 산업명: FactSet 영문 → 한국어 (config.INDUSTRY_KO, 없으면 원래 값)
+        ko = getattr(config, "INDUSTRY_KO", {})
+        self.meta["industry"] = [ko.get(en, ind) for en, ind in zip(self.meta["industry_en"], self.meta["industry"])]
+        if mkt == "kr":                                   # '유한양행보통주' → '유한양행'
+            self.meta["name"] = self.meta["name"].astype(str).str.replace(r"\s*보통주$", "", regex=True)
         self.A, self.C, self.V = A[cols], C[cols], V[cols].fillna(0)
         self.sect = self.meta["sector"]
         self.sectors = sorted(self.sect.unique(), key=lambda s: config.SECTOR_KO.get(s, s))
@@ -162,8 +167,10 @@ class Engine:
             r, w = self.ret.loc[days, mem], self.W.loc[days, mem]
             cw = (w * r).sum(axis=1, min_count=1) / w.sum(axis=1, min_count=1)
             ew = r.clip(-config.RET_CLIP, config.RET_CLIP).mean(axis=1)
+            wk = ((1 + r.fillna(0)).prod() - 1).where(r.notna().any())
             buckets.append({
                 "label": label, "n": int(len(mem)),
+                "up": _r((wk.dropna() > 0).mean() * 100, 0) if wk.notna().any() else None,   # 주간 오른 종목 %
                 "day": {dk: {"cw": _r(cw[d] * 100), "ew": _r(ew[d] * 100)} for d, dk in zip(days, ds)},
                 "week": {"cw": _r((np.prod(1 + cw.dropna()) - 1) * 100),
                          "ew": _r((np.prod(1 + ew.dropna()) - 1) * 100)},
