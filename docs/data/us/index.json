@@ -27,7 +27,7 @@
   "2026-10-05",
   "2026-10-12"
  ],
- "generated": "2026-10-19 20:58 KST",
+ "generated": "2026-10-19 21:10 KST",
  "last_day": "2026-10-16",
  "universe": "2026-10",
  "n_stocks": 2529,
@@ -36,14 +36,15 @@
  "market": "us",
  "label": "미국",
  "flag": "🇺🇸",
- "classification_fingerprint": "6b2bea85077ad0b252dfe5a8b62e121558a2b476ea79ae3bcb63ce73147978e5",
+ "classification_fingerprint": "291cfe0a09eb4ad00ca962f623f7137a9ee47b5660b4cf0ec6335b674a44e8db",
  "classification": {
-  "sector": "공통 공급자 분류",
-  "industry": "토스·검토 승인 우선, 나머지 공급자 분류",
+  "sector": "토스 대분류",
+  "industry": "토스 전체 소속, 미등록 별도",
   "counts": {
-   "provider": 455,
-   "toss": 2074
+   "toss": 2440,
+   "unmapped": 89
   },
-  "basis": "현재 분류 기준 재집계"
+  "basis": "현재 분류 기준 재집계",
+  "overlap": true
  }
 }
