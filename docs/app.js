@@ -974,9 +974,9 @@ function nhClassification(st){
   const c = st.classification;
   if(!c) return esc(st.industry||"");
   const source = {toss:"토스", reviewed:"검토 승인", provider:"기존 공급자", unknown:"미분류", unmapped:"토스 미등록"}[c.source] || "기존 공급자";
-  const path = [c.sector,c.industry,c.subindustry].filter(x=>x && x!=="미분류");
+  const path = [...new Set([c.sector,c.industry,c.subindustry].filter(x=>x && x!=="미분류"))];
   const memberships = (c.toss_memberships||[]).map(p=>p.map(x=>x.name).join(" › "));
-  return `<span>${esc(path.join(" › ") || st.label)} · ${esc(source)}</span>` +
+  return `<span>${esc(c.source==="toss" && memberships.length>1 ? "복수 소속" : path.join(" › ") || st.label)} · ${esc(source)}</span>` +
     (memberships.length ? `<div style="margin-top:4px;color:var(--ink3)">토스 소속: ${memberships.map(esc).join(" / ")}${c.toss_ambiguous?" · 각 소속 업종에 포함":""}</div>` : "");
 }
 
