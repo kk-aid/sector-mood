@@ -28,7 +28,7 @@
   "2026-10-12",
   "2026-10-19"
  ],
- "generated": "2026-10-19 19:31 KST",
+ "generated": "2026-10-19 20:55 KST",
  "last_day": "2026-10-19",
  "universe": "2026-10",
  "n_stocks": 644,
@@ -37,13 +37,14 @@
  "market": "kr",
  "label": "한국",
  "flag": "🇰🇷",
- "classification_fingerprint": "9543761d1e8dfc12c98de55ead2419c98e7c7b6fcc4a0ffb5c56103a320b0730",
+ "classification_fingerprint": "d83369f069aff709a78853cbe59bbdfd3a91ca2b0fb8e2950f0bb21ec3578786",
  "classification": {
   "sector": "공통 공급자 분류",
   "industry": "토스·검토 승인 우선, 나머지 공급자 분류",
   "counts": {
-   "provider": 314,
-   "toss": 330
+   "provider": 313,
+   "toss": 330,
+   "reviewed": 1
   },
   "basis": "현재 분류 기준 재집계"
  }
