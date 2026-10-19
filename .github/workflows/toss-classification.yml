@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 40
     defaults:
       run:
-        shell: '"C:\Program Files\Git\bin\bash.exe" --noprofile --norc -e -o pipefail {0}'
+        shell: cmd
     env:
       PYTHONUTF8: '1'
     steps:
@@ -38,36 +38,50 @@ jobs:
       - name: Prepare existing Python
         run: |
           py -3 -m venv .venv
-          echo "$GITHUB_WORKSPACE/.venv/Scripts" >> "$GITHUB_PATH"
-      - run: pip install -r requirements.txt
+          if errorlevel 1 exit /b 1
+      - name: Install dependencies
+        run: .venv\Scripts\python.exe -m pip install -r requirements.txt
       - name: Test classification
         run: |
-          python -m unittest tests.test_toss_classify tests.test_taxonomy
-          python -m tests.test_newhigh
+          .venv\Scripts\python.exe -m unittest tests.test_toss_classify tests.test_taxonomy
+          if errorlevel 1 exit /b 1
+          .venv\Scripts\python.exe -m tests.test_newhigh
+          if errorlevel 1 exit /b 1
       - name: Sync official sector classifications
+        shell: py -3 {0}
         env:
           TOSS_CLIENT_ID: ${{ secrets.TOSS_CLIENT_ID }}
           TOSS_CLIENT_SECRET: ${{ secrets.TOSS_CLIENT_SECRET }}
           DRY_RUN: ${{ inputs.dry_run }}
           PROBE: ${{ inputs.probe }}
-          EVENT: ${{ github.event_name }}
         run: |
-          ARGS=()
-          if [ "$DRY_RUN" = true ]; then
-            ARGS+=(--dry-run)
-            if [ "$PROBE" = true ]; then ARGS+=(--max-sectors 3); fi
-          fi
-          python -m pipeline.toss_classify "${ARGS[@]}"
+          import os
+          import subprocess
+          args = [r".venv\Scripts\python.exe", "-m", "pipeline.toss_classify"]
+          if os.environ.get("DRY_RUN") == "true":
+              args.append("--dry-run")
+              if os.environ.get("PROBE") == "true":
+                  args.extend(["--max-sectors", "3"])
+          subprocess.run(args, check=True)
       - name: Commit classification cache
         if: inputs.dry_run != true
+        shell: py -3 {0}
         run: |
-          git config user.name sector-mood-bot
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/newhigh/toss
-          if git diff --cached --quiet; then exit 0; fi
-          git commit -m "classification: sync Toss sector memberships"
-          for ATTEMPT in 1 2 3 4 5; do
-            git pull --rebase --autostash
-            if git push; then exit 0; fi
-          done
-          exit 1
+          import subprocess
+          def git(*args):
+              return subprocess.run(["git", *args], check=True)
+          git("config", "user.name", "sector-mood-bot")
+          git("config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com")
+          git("add", "data/newhigh/toss")
+          result = subprocess.run(["git", "diff", "--cached", "--quiet"]).returncode
+          if result == 0:
+              raise SystemExit(0)
+          if result != 1:
+              raise SystemExit(result)
+          git("commit", "-m", "classification: sync Toss sector memberships")
+          for attempt in range(5):
+              git("pull", "--rebase", "--autostash")
+              if subprocess.run(["git", "push"]).returncode == 0:
+                  break
+          else:
+              raise SystemExit("Could not push classification cache after 5 attempts")
