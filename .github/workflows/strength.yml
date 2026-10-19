@@ -1,0 +1,102 @@
+name: strength-and-etfs
+
+on:
+  schedule:
+    - cron: "20 22 * * 1-5"
+    - cron: "20 7 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      market:
+        description: "시장"
+        type: choice
+        options: [all, kr, us, jp]
+        default: all
+      dry_run:
+        description: "전송·기록 없이 확인"
+        type: boolean
+        default: true
+      force:
+        description: "결과가 같아도 전송"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+concurrency:
+  group: strength-and-etfs
+  cancel-in-progress: false
+
+jobs:
+  screens:
+    strategy:
+      fail-fast: false
+      matrix:
+        market: [kr, jp, us]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Decide market
+        id: target
+        env:
+          EVENT: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
+          INPUT_MARKET: ${{ inputs.market }}
+          MARKET: ${{ matrix.market }}
+        run: |
+          ACTIVE=false
+          if [ "$EVENT" = "schedule" ]; then
+            if [ "$SCHEDULE" = "20 22 * * 1-5" ] && [ "$MARKET" = us ]; then ACTIVE=true; fi
+            if [ "$SCHEDULE" = "20 7 * * 1-5" ] && [ "$MARKET" != us ]; then ACTIVE=true; fi
+          elif [ "$INPUT_MARKET" = all ] || [ "$INPUT_MARKET" = "$MARKET" ]; then ACTIVE=true
+          fi
+          echo "active=$ACTIVE" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
+        if: steps.target.outputs.active == 'true'
+      - uses: actions/setup-python@v6
+        if: steps.target.outputs.active == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+        if: steps.target.outputs.active == 'true'
+      - name: Validate screening logic
+        if: steps.target.outputs.active == 'true'
+        run: |
+          python -m unittest tests.test_strength
+          python -m tests.test_newhigh
+      - name: RS, turnover, R/S Flip and ETFs
+        if: steps.target.outputs.active == 'true'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.NEWHIGH_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
+          MARKET: ${{ matrix.market }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          ARGS=()
+          if [ "$DRY_RUN" = true ]; then ARGS+=(--dry-run); fi
+          if [ "$FORCE" = true ]; then ARGS+=(--force); fi
+          python -m pipeline.strength --market "$MARKET" "${ARGS[@]}"
+      - name: Commit screening snapshots
+        if: steps.target.outputs.active == 'true' && inputs.dry_run != true
+        env:
+          MARKET: ${{ matrix.market }}
+        run: |
+          git config user.name sector-mood-bot
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "docs/data/$MARKET" "data/newhigh/$MARKET"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "screens: $MARKET $(date -u +%F)"
+          for ATTEMPT in 1 2 3 4 5; do
+            git pull --rebase --autostash
+            if git push; then exit 0; fi
+          done
+          exit 1
+      - name: Failure alert
+        if: failure() && steps.target.outputs.active == 'true' && inputs.dry_run != true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.NEWHIGH_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python -m pipeline.notify --fail "$RUN_URL"
