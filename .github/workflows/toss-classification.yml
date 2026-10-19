@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 40
     defaults:
       run:
-        shell: powershell
+        shell: bash
     env:
       PYTHONUTF8: '1'
     steps:
@@ -38,13 +38,11 @@ jobs:
       - name: Prepare existing Python
         run: |
           py -3 -m venv .venv
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          (Join-Path $env:GITHUB_WORKSPACE '.venv\Scripts') | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "$GITHUB_WORKSPACE/.venv/Scripts" >> "$GITHUB_PATH"
       - run: pip install -r requirements.txt
       - name: Test classification
         run: |
           python -m unittest tests.test_toss_classify tests.test_taxonomy
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m tests.test_newhigh
       - name: Sync official sector classifications
         env:
@@ -54,28 +52,22 @@ jobs:
           PROBE: ${{ inputs.probe }}
           EVENT: ${{ github.event_name }}
         run: |
-          $syncArgs = @()
-          if ($env:DRY_RUN -eq 'true') {
-            $syncArgs += '--dry-run'
-            if ($env:PROBE -eq 'true') { $syncArgs += @('--max-sectors', '3') }
-          }
-          python -m pipeline.toss_classify @syncArgs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ARGS=()
+          if [ "$DRY_RUN" = true ]; then
+            ARGS+=(--dry-run)
+            if [ "$PROBE" = true ]; then ARGS+=(--max-sectors 3); fi
+          fi
+          python -m pipeline.toss_classify "${ARGS[@]}"
       - name: Commit classification cache
         if: inputs.dry_run != true
         run: |
           git config user.name sector-mood-bot
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/newhigh/toss
-          git diff --cached --quiet
-          if ($LASTEXITCODE -eq 0) { exit 0 }
-          if ($LASTEXITCODE -ne 1) { exit $LASTEXITCODE }
+          if git diff --cached --quiet; then exit 0; fi
           git commit -m "classification: sync Toss sector memberships"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          for ($attempt = 1; $attempt -le 5; $attempt++) {
+          for ATTEMPT in 1 2 3 4 5; do
             git pull --rebase --autostash
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            git push
-            if ($LASTEXITCODE -eq 0) { exit 0 }
-          }
+            if git push; then exit 0; fi
+          done
           exit 1
