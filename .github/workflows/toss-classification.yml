@@ -21,12 +21,12 @@ permissions:
   contents: write
 concurrency:
   group: toss-sector-sync
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 jobs:
   sync:
     if: github.event_name != 'schedule' || vars.TOSS_ENABLED == 'true'
     # Use a runner whose outbound IP is registered with Toss.
-    runs-on: ${{ vars.TOSS_RUNNER || 'toss-pc' }}
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 40
     defaults:
       run:
