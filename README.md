@@ -277,14 +277,14 @@ ETF 소속과 주식 소속은 별도 키로 저장한다. 일본은 기존 공�
    같은 client의 기존 토큰이 즉시 무효화되기 때문이다.
 2. 토스 WTS 설정 → Open API → 허용 IP에 **실제 실행 환경의 고정 송신 IP** 등록.
    일반 GitHub-hosted runner의 IP는 고정되지 않는다. 등록 가능한 고정 송신 IP가
-   있는 러너를 준비하고 Repository Variables의 `TOSS_RUNNER`에 runner label을 넣는다.
-   미설정이면 ubuntu-latest이며 IP 허용 조건을 충족하지 못하면 403으로 실패한다.
+   있는 Windows 실행기를 등록한다. 현재 workflow는 기본 라벨
+   `self-hosted`, `Windows`, `X64`로 PC를 선택한다.
    코드에서 IP 제한을 우회하거나 광범위한 IP를 자동 등록하지 않는다.
 3. `toss-sector-sync`를 수동으로 dry_run=true, probe=true로 실행해 연결 확인.
-   main에 이 코드가 반영되는 최초 push도 같은 소량 dry-run을 실행한다. PR 이벤트에는
-   비밀 키를 전달하지 않는다. 이 확인은 데이터 저장·텔레그램 전송을 하지 않는다.
-4. 연결 확인 후 dry_run=false로 전체 분류를 수집한다. 매일 05:30 KST 자동 갱신은
-   Repository Variables의 `TOSS_ENABLED=true`로 켠다. 그 전에는 예약 실행을 건너뛴다.
+   코드 push만으로 토스 조회는 실행하지 않는다. PR 이벤트에는 비밀 키를 전달하지 않는다. 이 확인은 데이터 저장·텔레그램 전송을 하지 않는다.
+4. 연결 확인 후 dry_run=false로 전체 분류를 수집한다. 매일 **21:00 KST**에 자동 실행한다.
+   `TOSS_ENABLED=false`로 예약 실행을 중지할 수 있다. PC에 로그인해서 실행기가
+   온라인이어야 한다. 오프라인이면 GitHub가 최대 24시간 대기한다.
 
 공식 `Sector` API의 목록·구성 주식·관련 ETF만 GET으로 사용한다. 인증 토큰 교환 외
 POST, 계좌 조회·주문 엔드포인트는 사용하지 않으며 코드 allowlist로 차단한다.
@@ -299,3 +299,22 @@ python -m pipeline.toss_classify
 
 공식 명세 확인 버전: 1.2.24
 https://openapi.tossinvest.com/openapi-docs/latest/openapi.json
+
+### 사이트에 토스 분류 반영
+
+- 수집 성공 후 `apply-toss-to-site`가 GitHub 실행기에서 저장된 캐시만 읽는다.
+  이 작업에는 토스 키나 사용자 PC가 필요하지 않다.
+- 신고가 페이지와 누적 군집·사후 성과의 업종 라벨을 다시 계산한다.
+  저장된 가격·차트·뉴스·공시·종목 수익률은 유지하며 메시지를 보내지 않는다.
+- 심리 지도·로테이션·추세·통계는 국가 간 공통 대분류를 유지하고, 확정된 토스
+  최하위 업종을 세부업종 집계에 사용한다. 복수 소속은 기존 공급자 업종으로 집계한다.
+- 업종 매핑이 달라지면 저장된 주간 구간도 현재 분류로 다시 계산한다.
+  이는 과거 당시의 업종 분류를 복원한 결과가 아니다.
+- 신고가 카드에는 분류 출처와 모든 토스 소속 경로를 표시한다.
+  일본은 기존 공급자 분류를 유지한다.
+
+```bash
+python -m pipeline.refresh_classification
+python -m pipeline.run --market kr --weeks 2
+python -m pipeline.run --market us --weeks 2
+```
