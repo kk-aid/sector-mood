@@ -197,3 +197,9 @@ WEEKLY_INDUSTRY_MIN_N = 3          # 강·약 산업과 3국 공통 업종에 �
 WEEKLY_TOP = 8                     # 강·약 산업, 3국 공통 업종 표시 개수
 WEEKLY_MOVERS = 10                 # 시총 증감 상위 종목 수
 WEEKLY_REBUILD = 2                 # 매 실행 때 다시 만드는 최근 주 수 (데이터 없으면 전체 이력 백필)
+
+# ── 추가 스크리닝 (기존 신고가 전송과 독립 실행) ──────────
+STRENGTH_TOP = 15  # 각 조건·주식/ETF별 최대 표시 수
+# 기존 주간 분석의 주요 지수·업종 ETF를 재사용. 레버리지/인버스 자동 추가 안 함.
+STRENGTH_ETFS = {m: list(dict.fromkeys(WEEKLY_ETFS[m])) for m in MARKETS}
+STRENGTH_ETFS["us"] += [("미국 전체 VTI", "VTI"), ("소형주 IWM", "IWM"), ("미국 국채 TLT", "TLT"), ("금 GLD", "GLD")]
