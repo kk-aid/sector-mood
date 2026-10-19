@@ -156,7 +156,7 @@ class Engine:
             else:
                 sk,ik = row['sector'],row['industry_en']
                 sectors,industries = [sk],[ik]
-                self.sector_names[sk] = config.SECTOR_KO.get(sk,sk)
+                self.sector_names[sk] = ("기존 분류 · " if self.use_japan else "") + config.SECTOR_KO.get(sk,sk)
                 self.ind_name[ik],self.ind_sector[ik] = row['industry'],sk
             self.sector_memberships[ticker] = list(dict.fromkeys(sectors))
             self.industry_memberships[ticker] = list(dict.fromkeys(industries))

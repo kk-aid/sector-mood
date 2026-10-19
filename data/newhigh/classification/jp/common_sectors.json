@@ -119,21 +119,6 @@
       "method": "provider_industry_crosswalk"
     },
     {
-      "provider_industry": "Computer Processing Hardware",
-      "root_id": "87",
-      "method": "provider_industry_crosswalk"
-    },
-    {
-      "provider_industry": "Computer Peripherals",
-      "root_id": "87",
-      "method": "provider_industry_crosswalk"
-    },
-    {
-      "provider_industry": "Computer Communications",
-      "root_id": "87",
-      "method": "provider_industry_crosswalk"
-    },
-    {
       "provider_industry": "Chemicals: Specialty",
       "root_id": "129",
       "method": "provider_industry_crosswalk"
@@ -190,7 +175,7 @@
     },
     {
       "provider_industry": "Food Distributors",
-      "root_id": "101",
+      "root_id": "49",
       "method": "provider_industry_crosswalk"
     },
     {
@@ -324,17 +309,7 @@
       "method": "provider_industry_crosswalk"
     },
     {
-      "provider_industry": "Tools & Hardware",
-      "root_id": "67",
-      "method": "provider_industry_crosswalk"
-    },
-    {
       "provider_industry": "Pulp & Paper",
-      "root_id": "47",
-      "method": "provider_industry_crosswalk"
-    },
-    {
-      "provider_industry": "Forest Products",
       "root_id": "47",
       "method": "provider_industry_crosswalk"
     },
@@ -374,22 +349,7 @@
       "method": "provider_industry_crosswalk"
     },
     {
-      "provider_industry": "Recreational Products",
-      "root_id": "163",
-      "method": "provider_industry_crosswalk"
-    },
-    {
-      "provider_industry": "Casinos/Gaming",
-      "root_id": "163",
-      "method": "provider_industry_crosswalk"
-    },
-    {
       "provider_industry": "Personnel Services",
-      "root_id": "947",
-      "method": "provider_industry_crosswalk"
-    },
-    {
-      "provider_industry": "Advertising/Marketing Services",
       "root_id": "947",
       "method": "provider_industry_crosswalk"
     },
@@ -404,19 +364,26 @@
       "method": "provider_industry_crosswalk"
     },
     {
-      "provider_industry": "Specialty Telecommunications",
-      "root_id": "81",
-      "method": "provider_industry_crosswalk"
-    },
-    {
       "provider_industry": "Telecommunications Equipment",
       "root_id": "81",
       "method": "provider_industry_crosswalk"
     },
     {
-      "provider_industry": "Agricultural Commodities/Milling",
-      "root_id": "615",
+      "provider_industry": "Restaurants",
+      "root_id": "49",
       "method": "provider_industry_crosswalk"
     }
+  ],
+  "excluded_mixed_industries": [
+    "Specialty Telecommunications",
+    "Computer Processing Hardware",
+    "Computer Peripherals",
+    "Computer Communications",
+    "Agricultural Commodities/Milling",
+    "Forest Products",
+    "Recreational Products",
+    "Casinos/Gaming",
+    "Advertising/Marketing Services",
+    "Tools & Hardware"
   ]
 }
