@@ -1,0 +1,115 @@
+{
+  "basis": "기존 공급자 업종 유지; 공시와 IR 근거를 쌓아 세부업종 보강",
+  "automatic_grouping": false,
+  "sources": {
+    "edinet": {
+      "url": "https://disclosure2.edinet-fsa.go.jp/week0020.aspx",
+      "api_spec": "https://disclosure2dl.edinet-fsa.go.jp/guide/static/disclosure/download/ESE140206.pdf",
+      "api_status": "not_connected",
+      "requires_api_key": true
+    },
+    "ir": "공개 기업 IR 원문 확인"
+  },
+  "review_fields": [
+    "주사업",
+    "보고 부문별 매출·이익과 기준기간",
+    "밸류체인 역할",
+    "제품별 용도",
+    "보조 테마",
+    "원문 위치·근거 링크",
+    "확인일"
+  ],
+  "rules": [
+    "사업보고서의 직접 사업·매출 근거로 판단",
+    "고객·경쟁사·투자 테마 언급을 주사업으로 승격하지 않음",
+    "매출 비중이 불명확하면 단일 주사업을 임의 확정하지 않음",
+    "규모·테마·사업 공정을 별도 필드로 유지"
+  ],
+  "candidates": [
+    {
+      "code": "8035",
+      "name": "도쿄일렉트론",
+      "proposed_industry": "반도체 장비",
+      "proposed_subindustry": "전공정 장비",
+      "business_roles": [
+        "증착",
+        "코터·디벨로퍼",
+        "식각",
+        "세정"
+      ],
+      "notes": "FY2026 연결재무제표는 반도체 생산장비 단일 부문을 공시한다. 프로버·본더 제품도 있어 전공정만 영위한다고 해석하지 않는다.",
+      "sources": [
+        {
+          "url": "https://www.tel.com/ir/library/consolidated-financial-statements/i242su00000000yk-att/Consolidated_Financial_Statements_FY2026.pdf",
+          "locator": "PDF pp.12,53; printed pp.9,50"
+        },
+        {
+          "url": "https://www.tel.com/corporatesummary/",
+          "locator": "What we do / Broad product lineup"
+        }
+      ],
+      "remaining_checks": [
+        "제품별 매출 분해 가능 범위",
+        "장비·서비스 및 보조 제품을 주사업과 분리"
+      ],
+      "market": "jp",
+      "reviewed_on": "2026-10-19",
+      "status": "needs_review",
+      "applied": false
+    },
+    {
+      "code": "6857",
+      "name": "어드반테스트",
+      "proposed_industry": "반도체 장비",
+      "proposed_subindustry": "반도체 전기적 테스트 장비",
+      "business_roles": [
+        "SoC 테스터",
+        "메모리 테스터",
+        "웨이퍼·최종 테스트",
+        "시스템레벨 테스트"
+      ],
+      "notes": "2026 통합보고서는 테스트 시스템과 서비스·기타 부문을 구분한다. SEM·광마스크 검사를 함께 영위하므로 모든 검사를 하나의 공정으로 취급하지 않는다.",
+      "sources": [
+        {
+          "url": "https://www.advantest.com/document/en/investors/ir-library/annual/E_01_IAR2026.pdf",
+          "locator": "printed pp.15–16 / Business Segment"
+        }
+      ],
+      "remaining_checks": [
+        "최신 보고 부문별 매출·이익 비중 확인",
+        "테스터와 광학검사 업종 경계 정리"
+      ],
+      "market": "jp",
+      "reviewed_on": "2026-10-19",
+      "status": "needs_review",
+      "applied": false
+    },
+    {
+      "code": "6146",
+      "name": "디스코",
+      "proposed_industry": "반도체 장비",
+      "proposed_subindustry": "절삭·연삭·연마 장비 및 소모품",
+      "business_roles": [
+        "다이싱",
+        "그라인딩",
+        "폴리싱",
+        "블레이드·휠"
+      ],
+      "notes": "회사 사업 설명은 정밀가공 장비와 블레이드·휠 등 소모품을 구분한다. 단순 후공정 전용으로 단정하지 않고 공정 단계와 사업 역할을 별도로 기록한다.",
+      "sources": [
+        {
+          "url": "https://www.disco.co.jp/eg/ir/mginfo/bg_business.html",
+          "locator": "Four Business Fields / Precision Processing Equipment / Consumable Products"
+        }
+      ],
+      "remaining_checks": [
+        "최신 유가증권보고서 및 장비·소모품 매출 비중 확인",
+        "전공정 웨이퍼 가공과 후공정 노출을 구분"
+      ],
+      "market": "jp",
+      "reviewed_on": "2026-10-19",
+      "status": "needs_review",
+      "applied": false
+    }
+  ]
+}
