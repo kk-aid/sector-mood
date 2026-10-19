@@ -28,7 +28,7 @@
   "2026-10-12",
   "2026-10-19"
  ],
- "generated": "2026-10-19 21:32 KST",
+ "generated": "2026-10-19 17:21 KST",
  "last_day": "2026-10-19",
  "universe": "2026-10",
  "n_stocks": 987,
@@ -36,18 +36,5 @@
  "currency": "엔",
  "market": "jp",
  "label": "일본",
- "flag": "🇯🇵",
- "classification_fingerprint": "743b55d81b1829adb9b487a64211220caa949770568978f7491655efd1e21406",
- "classification": {
-  "sector": "JPX 17업종",
-  "industry": "JPX 33업종, 미등록 별도",
-  "counts": {
-   "jpx": 945,
-   "jpx_product": 40,
-   "jpx_unmapped": 2
-  },
-  "basis": "현재 분류 기준 재집계",
-  "overlap": false,
-  "asof": "20260930"
- }
+ "flag": "🇯🇵"
 }

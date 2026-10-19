@@ -267,7 +267,7 @@ https://opendart.fss.or.kr/guide/detail.do?apiGrpCd=DS001&apiId=2019003
 복수 소속을 이유로 기존 FactSet 업종으로 되돌리지 않는다. 토스에 없는 종목은
 별도 `토스 미등록`으로 표시한다. 공시로 검토한 수동 분류는 토스 미등록일 때만
 별도 승인 분류로 사용하며, 토스가 있는 종목의 검토 내용은 보조 근거로 보존한다.
-일본은 JPX 공식 17개 대분류·33개 업종을 사용한다.
+일본은 기존 공급자 분류를 유지한다.
 
 시장 전체는 종목당 한 번 계산한다. 업종별 수익률·breadth·거래대금은 해당 업종의
 고유 구성종목으로 계산하므로 복수 소속 종목은 여러 업종에 나타날 수 있다.
@@ -315,7 +315,7 @@ https://openapi.tossinvest.com/openapi-docs/latest/openapi.json
 - 업종 매핑이 달라지면 저장된 주간 구간도 현재 분류로 다시 계산한다.
   이는 과거 당시의 업종 분류를 복원한 결과가 아니다.
 - 신고가 카드에는 분류 출처와 모든 토스 소속 경로를 표시한다.
-  일본은 JPX 공식 17개 대분류·33개 업종을 사용한다.
+  일본은 기존 공급자 분류를 유지한다.
 
 ```bash
 python -m pipeline.refresh_classification
@@ -323,19 +323,17 @@ python -m pipeline.run --market kr --weeks 2
 python -m pipeline.run --market us --weeks 2
 ```
 
-### 일본 JPX 공식 분류
+### 일본 사업 분류 개선 방향
 
-- JPX의 월말 동증 상장종목 목록에서 공식 17·33업종 코드와 일본어 원문을 보존하고 한국어로 표시한다.
-- `jpx-sector-sync`가 일본 평일 06:15 KST에 GitHub 실행기에서 갱신하므로 사용자 PC가 필요 없다. JPX 원본은 매월 세 번째 영업일에 전월 말 기준으로 갱신된다.
-- 신규 상장 등 미매칭 종목은 `JPX 미등록`으로 남긴다. ETF·ETN·리츠 등 업종 코드가 없는 상품은 공식 상품 구분으로 분리한다.
-- 파일 구조·코드·전체 업종 수 검증이 실패하면 기존 캐시를 교체하지 않는다. 사이트에 원본 기준일을 표시한다.
-- 저장된 지도·추세·신고가 기록을 현재 분류로 재집계한다. 전기기기를 반도체 등 더 세부적인 사업 분류로 임의 변경하지 않는다.
-- 한국·미국의 토스와 일본의 JPX는 별도 체계이며 국가 간 같은 코드로 강제 합치지 않는다.
+JPX 17·33업종을 사이트 기본 분류로 쓰던 변경을 철회했다. 일본 지도·추세·신고가
+기록은 기존 공급자 업종으로 복구하며, JPX 자동 적용 예약은 중지한다.
+JPX 원본은 보조 참고 자료로만 남긴다.
 
-공식 원본: https://www.jpx.co.jp/markets/statistics-equities/misc/01.html
+일본의 DART에 해당하는 자료는 금융청 EDINET의 유가증권보고서이다.
+사업의 내용·보고 부문·부문별 매출 및 이익을 기업 IR 제품 설명과 함께 검토한다.
+기존 분류를 기본으로 두고, 사업 근거가 확인된 종목부터 세부업종을 보강한다.
+주사업과 보조 테마를 분리하고, 고객·경쟁사 언급만으로 업종을 바꾸지 않는다.
+EDINET API v2 자동 수집에는 발급된 API 키가 필요하다. 키 연결 전에는 공개 IR 자료를 활용한다.
 
-```bash
-python -m pipeline.jpx_classify
-python -m pipeline.refresh_classification --market jp
-python -m pipeline.run --market jp --weeks 2
-```
+공식 안내: https://disclosure2.edinet-fsa.go.jp/week0020.aspx
+API 명세: https://disclosure2dl.edinet-fsa.go.jp/guide/static/disclosure/download/ESE140206.pdf

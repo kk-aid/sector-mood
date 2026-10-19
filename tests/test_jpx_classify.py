@@ -22,29 +22,17 @@ class JpxTests(unittest.TestCase):
         self.assertEqual(rows['1306']['kind'],'product')
         self.assertNotIn('industry',rows['1306'])
         self.assertEqual(normalize('130a.T'),'130A')
-        with patch('pipeline.jpx_classify.lookup',side_effect=lambda c:rows.get(normalize(c))):
-            self.assertEqual(profile({'name':'8035.T'},'jp')['source'],'jpx')
-            self.assertEqual(profile({'name':'1306'},'jp',asset='etf')['industry'],'ETF·ETN')
-            p=profile({'name':'9999','industry':'Semiconductors'},'jp')
-            self.assertEqual(p['industry'],'JPX 미등록')
 
     def test_invalid_schema_or_codes_fail(self):
         with self.assertRaises(ValueError): parse_frame(pd.DataFrame())
         frame=self.rows();frame.loc[0,'33業種コード']='9999'
         with self.assertRaises(ValueError): parse_frame(frame)
 
-    def test_engine_uses_official_hierarchy_preserving_market_totals(self):
-        uni,A,C,V=synthetic.make(n_days=260,seed=4)
-        uni=uni[:2];cols=[u['ticker'] for u in uni];A,C,V=(f[cols] for f in (A,C,V))
-        baseline=Engine(uni,A,C,V,mkt='jp')
-        for u in uni: u.pop('_synthetic',None)
-        row=parse_frame(self.rows())['8035']
-        with patch('pipeline.jpx_classify.lookup',side_effect=lambda c:row if c==cols[0] else None):
-            eng=Engine(uni,A,C,V,mkt='jp')
-        self.assertEqual(eng.sector_memberships[cols[0]],['jpx:9'])
-        self.assertEqual(eng.industry_memberships[cols[0]],['jpx:3650'])
-        self.assertEqual(eng.meta.at[cols[1],'industry'],'JPX 미등록')
-        self.assertAlmostEqual(eng.mkt_cw.iloc[-1],baseline.mkt_cw.iloc[-1])
-        self.assertAlmostEqual(eng.mkt_val.iloc[-1],baseline.mkt_val.iloc[-1])
+    def test_japan_keeps_provider_despite_jpx_cache(self):
+        rows=parse_frame(self.rows())
+        with patch('pipeline.jpx_classify.lookup',side_effect=lambda c:rows.get(normalize(c))):
+            p=profile({'name':'8035','sector':'Electronic Technology','industry':'Semiconductors'},'jp')
+        self.assertEqual(p['source'],'provider')
+        self.assertEqual(p['provider_industry'],p['industry'])
 
 if __name__=='__main__': unittest.main()

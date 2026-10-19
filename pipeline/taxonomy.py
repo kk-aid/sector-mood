@@ -63,22 +63,7 @@ def profile(row, market, legacy=None, reviewed=None, asset="stock"):
     out.update(toss_memberships=(membership or {}).get('memberships', []), toss_asof=asof)
     out['provider_sector'] = sector
     out['provider_industry'] = industry
-    if market == 'jp':
-        from .jpx_classify import lookup, SOURCE
-        jpx = lookup(code)
-        if jpx and jpx['kind'] == 'stock' and asset == 'stock':
-            out.update(sector=jpx['sector'], industry=jpx['industry'], source='jpx',
-                       source_url=SOURCE, status='official_classified', jpx=jpx)
-        elif jpx and jpx['kind'] == 'product':
-            out.update(sector='상장 상품', industry={'ETF・ETN':'ETF·ETN', 'REIT・ベンチャーファンド・カントリーファンド・インフラファンド':'리츠·벤처·국가·인프라 펀드'}.get(jpx['product'], jpx['product']), source='jpx_product',
-                       source_url=SOURCE, status='official_product', jpx=jpx)
-        elif approved:
-            out.update(sector=approved.get('sector') or sector, industry=approved['industry'],
-                       source='reviewed', source_url=approved['source_url'],
-                       reviewed_on=approved['reviewed_on'], status='approved')
-        else:
-            out.update(sector='JPX 미등록', industry='JPX 미등록', source='jpx_unmapped', status='jpx_unmapped')
-    elif membership:
+    if membership:
         paths = membership.get('memberships', [])
         roots = list(dict.fromkeys(p[0]['name'] for p in paths if p))
         industries = list(dict.fromkeys(p[min(1,len(p)-1)]['name'] for p in paths if p))

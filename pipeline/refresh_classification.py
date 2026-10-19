@@ -100,9 +100,6 @@ def main():
     parser.add_argument('--market', choices=['jp'])
     args = parser.parse_args()
     if args.market == 'jp':
-        from .jpx_classify import document
-        if not document().get('securities'):
-            raise SystemExit('JPX cache required; no files changed')
         refresh('jp')
         return
     markets, asof = toss_rows()
