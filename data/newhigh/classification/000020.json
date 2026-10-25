@@ -1,0 +1,20 @@
+{
+  "code": "000020",
+  "company": {
+    "corp_code": "00119195",
+    "corp_name": "동화약품(주)",
+    "stock_code": "000020",
+    "corp_cls": "Y",
+    "induty_code": "212"
+  },
+  "checked_on": "2026-10-25",
+  "receipt": "20261002000407",
+  "report_name": "[기재정정]반기보고서 (2026.06)",
+  "filing_date": "20261002",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20261002000407",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

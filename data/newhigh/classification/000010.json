@@ -1,0 +1,20 @@
+{
+  "code": "000010",
+  "company": {
+    "corp_code": "00149293",
+    "corp_name": "(주)신한은행",
+    "stock_code": "000010",
+    "corp_cls": "E",
+    "induty_code": "64121"
+  },
+  "checked_on": "2026-10-25",
+  "receipt": "20261007000174",
+  "report_name": "[기재정정]반기보고서 (2026.06)",
+  "filing_date": "20261007",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20261007000174",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

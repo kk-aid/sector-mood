@@ -1,0 +1,20 @@
+{
+  "code": "000100",
+  "company": {
+    "corp_code": "00145109",
+    "corp_name": "(주)유한양행",
+    "stock_code": "000100",
+    "corp_cls": "Y",
+    "induty_code": "212"
+  },
+  "checked_on": "2026-10-25",
+  "receipt": "20260814002038",
+  "report_name": "반기보고서 (2026.06)",
+  "filing_date": "20260814",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002038",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

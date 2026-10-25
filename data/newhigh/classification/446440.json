@@ -1,0 +1,20 @@
+{
+  "code": "446440",
+  "company": {
+    "corp_code": "01281541",
+    "corp_name": "(주)에피바이오텍",
+    "stock_code": "446440",
+    "corp_cls": "N",
+    "induty_code": "70113"
+  },
+  "checked_on": "2026-10-25",
+  "receipt": "20260323001434",
+  "report_name": "사업보고서 (2025.12)",
+  "filing_date": "20260323",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260323001434",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

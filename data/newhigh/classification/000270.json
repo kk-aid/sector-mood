@@ -1,0 +1,20 @@
+{
+  "code": "000270",
+  "company": {
+    "corp_code": "00106641",
+    "corp_name": "기아(주)",
+    "stock_code": "000270",
+    "corp_cls": "Y",
+    "induty_code": "30121"
+  },
+  "checked_on": "2026-10-25",
+  "receipt": "20260916000427",
+  "report_name": "[기재정정]반기보고서 (2026.06)",
+  "filing_date": "20260916",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260916000427",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}
