@@ -880,7 +880,7 @@ async function renderWeekly(){
   h += `</div>`;
 
   // 이번 주 매크로
-  const KEYM = [["KRW=X","원/달러"],["JPY=X","엔/달러"],["DX-Y.NYB","달러인덱스"],["^TNX","미 10년"],["BAMLH0A0HYM2","HY 스프레드"],["^VIX","VIX"],["CL=F","WTI"],["GC=F","금"],["HG=F","구리"],["BTC-USD","비트코인"]];
+  const KEYM = [["KRW=X","원/달러"],["JPY=X","엔/달러"],["DX-Y.NYB","달러인덱스"],["^TNX","미 10년"],["HYG","하이일드 HYG"],["^VIX","VIX"],["CL=F","WTI"],["GC=F","금"],["HG=F","구리"],["BTC-USD","비트코인"]];
   const chips = KEYM.filter(([s]) => MW[s]).map(([s,l]) => { const x = MW[s];
     return `<div class="mchip"><span>${l}</span><b class="mono ${pcls(x.w)}">${mfmt(x.w, x.kind)}</b><small class="mono">${x.kind==="bp"?x.wv.toFixed(2)+"%":Math.abs(x.wv)>=1000?Math.round(x.wv).toLocaleString():x.wv.toFixed(2)}</small></div>`; }).join("");
   if(chips) h += `<div class="wk-kicker" style="margin-top:24px">이번 주 매크로</div><div class="mchips">${chips}</div><p class="foot" style="margin-top:6px">주간 마지막 값 대비 전주 마지막 값. 금리·스프레드는 bp, VIX 는 포인트. 전체는 '매크로' 탭.</p>`;

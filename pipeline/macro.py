@@ -30,8 +30,8 @@ GROUPS = [
               ("유로/달러", "EURUSD=X", "pct", "yf"), ("위안/달러", "CNY=X", "pct", "yf")]),
     ("금리 (미국채)", [("3개월", "^IRX", "bp", "yf"), ("2년", "DGS2", "bp", "fred"), ("5년", "^FVX", "bp", "yf"),
                     ("10년", "^TNX", "bp", "yf"), ("30년", "^TYX", "bp", "yf"), ("10년−2년", "T10Y2Y", "bp", "fred")]),
-    ("신용", [("하이일드 스프레드", "BAMLH0A0HYM2", "bp", "fred"), ("투자등급 스프레드", "BAMLC0A0CM", "bp", "fred"),
-             ("하이일드 HYG", "HYG", "pct", "yf"), ("투자등급 LQD", "LQD", "pct", "yf")]),
+    # ICE BofA OAS(BAMLH0A0HYM2·BAMLC0A0CM)는 FRED 가 제3자 제공을 제한 → 공개 화면에서 제외 (2026-10-29)
+    ("신용", [("하이일드 HYG", "HYG", "pct", "yf"), ("투자등급 LQD", "LQD", "pct", "yf")]),
     ("채권 ETF", [("장기채 TLT", "TLT", "pct", "yf"), ("중기채 IEF", "IEF", "pct", "yf"), ("단기채 SHY", "SHY", "pct", "yf"),
                  ("물가채 TIP", "TIP", "pct", "yf")]),
     ("원자재", [("금", "GC=F", "pct", "yf"), ("은", "SI=F", "pct", "yf"), ("구리", "HG=F", "pct", "yf"),
@@ -99,7 +99,7 @@ def synthetic(symbols: list[str]) -> dict[str, pd.Series]:
     for s in symbols:
         rng = np.random.default_rng(zlib.crc32(s.encode()))
         base = {"^TNX": 4.2, "^FVX": 3.9, "^TYX": 4.6, "^IRX": 4.0, "DGS2": 3.8, "T10Y2Y": 0.4,
-                "BAMLH0A0HYM2": 3.1, "BAMLC0A0CM": 0.9, "^VIX": 16, "^MOVE": 95, "^VXN": 20}.get(s)
+                "^VIX": 16, "^MOVE": 95, "^VXN": 20}.get(s)
         if base is not None:
             v = base + np.cumsum(rng.normal(0, base * 0.01, len(idx)))
         else:
