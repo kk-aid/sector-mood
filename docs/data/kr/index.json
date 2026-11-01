@@ -29,21 +29,21 @@
   "2026-10-19",
   "2026-10-26"
  ],
- "generated": "2026-10-31 21:50 KST",
+ "generated": "2026-11-01 21:51 KST",
  "last_day": "2026-10-30",
- "universe": "2026-10",
- "n_stocks": 644,
+ "universe": "2026-11",
+ "n_stocks": 606,
  "min_mcap": 300000000000.0,
  "currency": "원",
  "market": "kr",
  "label": "한국",
  "flag": "🇰🇷",
- "classification_fingerprint": "e4e58b0b2341659083d5dc633964317dff11f355dcdfc291ca7d912305bdba83",
+ "classification_fingerprint": "3d548aa06395cafebc6d29dfe1f1d29dbec4651f8885451ba44f71e0be71e6f7",
  "classification": {
   "sector": "토스 대분류",
   "industry": "토스 전체 소속, 미등록 별도",
   "counts": {
-   "toss": 633,
+   "toss": 595,
    "unmapped": 11
   },
   "basis": "현재 분류 기준 재집계",
