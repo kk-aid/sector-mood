@@ -1,0 +1,20 @@
+{
+  "code": "000360",
+  "company": {
+    "corp_code": "00129411",
+    "corp_name": "삼환기업(주)",
+    "stock_code": "000360",
+    "corp_cls": "E",
+    "induty_code": "41221"
+  },
+  "checked_on": "2026-11-01",
+  "receipt": null,
+  "report_name": null,
+  "filing_date": null,
+  "source_url": null,
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

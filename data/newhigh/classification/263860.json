@@ -1,0 +1,20 @@
+{
+  "code": "263860",
+  "company": {
+    "corp_code": "00962223",
+    "corp_name": "지니언스(주)",
+    "stock_code": "263860",
+    "corp_cls": "K",
+    "induty_code": "58221"
+  },
+  "checked_on": "2026-11-01",
+  "receipt": "20260814000732",
+  "report_name": "반기보고서 (2026.06)",
+  "filing_date": "20260814",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814000732",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

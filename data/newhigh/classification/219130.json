@@ -1,0 +1,20 @@
+{
+  "code": "219130",
+  "company": {
+    "corp_code": "00617314",
+    "corp_name": "주식회사 타이거일렉",
+    "stock_code": "219130",
+    "corp_cls": "K",
+    "induty_code": "2622"
+  },
+  "checked_on": "2026-11-01",
+  "receipt": "20260814002236",
+  "report_name": "반기보고서 (2026.06)",
+  "filing_date": "20260814",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002236",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

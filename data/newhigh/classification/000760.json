@@ -1,0 +1,20 @@
+{
+  "code": "000760",
+  "company": {
+    "corp_code": "00145686",
+    "corp_name": "이화산업(주)",
+    "stock_code": "000760",
+    "corp_cls": "Y",
+    "induty_code": "467"
+  },
+  "checked_on": "2026-11-01",
+  "receipt": "20260814001479",
+  "report_name": "반기보고서 (2026.06)",
+  "filing_date": "20260814",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814001479",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

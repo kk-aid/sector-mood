@@ -1,0 +1,20 @@
+{
+  "code": "000650",
+  "company": {
+    "corp_code": "00151395",
+    "corp_name": "(주)천일고속",
+    "stock_code": "000650",
+    "corp_cls": "Y",
+    "induty_code": "49220"
+  },
+  "checked_on": "2026-11-01",
+  "receipt": "20260929000214",
+  "report_name": "[기재정정]반기보고서 (2026.06)",
+  "filing_date": "20260929",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260929000214",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}
