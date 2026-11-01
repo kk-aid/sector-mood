@@ -1,6 +1,6 @@
 {
   "source": "Toss official Sector API",
-  "asof": "2026-10-31T12:48:27.392176+00:00",
+  "asof": "2026-11-01T12:49:16.641055+00:00",
   "partial": false,
   "sectors": [
     {
@@ -132493,6 +132493,38 @@
           }
         ]
       },
+      "IAM": {
+        "symbol": "IAM",
+        "kind": "stock",
+        "name": "아이앰빅 테라퓨틱스",
+        "memberships": [
+          [
+            {
+              "id": "31",
+              "name": "의료",
+              "depth": 0
+            },
+            {
+              "id": "779",
+              "name": "제약",
+              "depth": 1
+            }
+          ]
+        ],
+        "ambiguous": false,
+        "primary": [
+          {
+            "id": "31",
+            "name": "의료",
+            "depth": 0
+          },
+          {
+            "id": "779",
+            "name": "제약",
+            "depth": 1
+          }
+        ]
+      },
       "KE": {
         "symbol": "KE",
         "kind": "stock",
@@ -148608,6 +148640,38 @@
           }
         ]
       },
+      "CTY": {
+        "symbol": "CTY",
+        "kind": "stock",
+        "name": "시티 테라퓨틱스",
+        "memberships": [
+          [
+            {
+              "id": "35",
+              "name": "바이오",
+              "depth": 0
+            },
+            {
+              "id": "37",
+              "name": "바이오신약",
+              "depth": 1
+            }
+          ]
+        ],
+        "ambiguous": false,
+        "primary": [
+          {
+            "id": "35",
+            "name": "바이오",
+            "depth": 0
+          },
+          {
+            "id": "37",
+            "name": "바이오신약",
+            "depth": 1
+          }
+        ]
+      },
       "IMTX": {
         "symbol": "IMTX",
         "kind": "stock",
@@ -151695,6 +151759,38 @@
         "symbol": "RZLT",
         "kind": "stock",
         "name": "레졸루트",
+        "memberships": [
+          [
+            {
+              "id": "35",
+              "name": "바이오",
+              "depth": 0
+            },
+            {
+              "id": "37",
+              "name": "바이오신약",
+              "depth": 1
+            }
+          ]
+        ],
+        "ambiguous": false,
+        "primary": [
+          {
+            "id": "35",
+            "name": "바이오",
+            "depth": 0
+          },
+          {
+            "id": "37",
+            "name": "바이오신약",
+            "depth": 1
+          }
+        ]
+      },
+      "TRXB": {
+        "symbol": "TRXB",
+        "kind": "stock",
+        "name": "티렉스 바이오",
         "memberships": [
           [
             {
@@ -250384,6 +250480,38 @@
           }
         ]
       },
+      "BBCI": {
+        "symbol": "BBCI",
+        "kind": "stock",
+        "name": "브래드버리 캐피탈",
+        "memberships": [
+          [
+            {
+              "id": "97",
+              "name": "금융",
+              "depth": 0
+            },
+            {
+              "id": "247",
+              "name": "결제서비스",
+              "depth": 1
+            }
+          ]
+        ],
+        "ambiguous": false,
+        "primary": [
+          {
+            "id": "97",
+            "name": "금융",
+            "depth": 0
+          },
+          {
+            "id": "247",
+            "name": "결제서비스",
+            "depth": 1
+          }
+        ]
+      },
       "SAIH": {
         "symbol": "SAIH",
         "kind": "stock",
@@ -285525,6 +285653,38 @@
           }
         ]
       },
+      "BMMX": {
+        "symbol": "BMMX",
+        "kind": "stock",
+        "name": "블랙 맘모스 메탈스",
+        "memberships": [
+          [
+            {
+              "id": "147",
+              "name": "금속",
+              "depth": 0
+            },
+            {
+              "id": "777",
+              "name": "광산개발",
+              "depth": 1
+            }
+          ]
+        ],
+        "ambiguous": false,
+        "primary": [
+          {
+            "id": "147",
+            "name": "금속",
+            "depth": 0
+          },
+          {
+            "id": "777",
+            "name": "광산개발",
+            "depth": 1
+          }
+        ]
+      },
       "NVA": {
         "symbol": "NVA",
         "kind": "stock",
@@ -293141,6 +293301,48 @@
             "id": "179",
             "name": "반도체팹리스",
             "depth": 1
+          }
+        ]
+      },
+      "etf:ASMH": {
+        "symbol": "ASMH",
+        "kind": "etf",
+        "name": "ASMH",
+        "memberships": [
+          [
+            {
+              "id": "169",
+              "name": "반도체",
+              "depth": 0
+            },
+            {
+              "id": "173",
+              "name": "반도체장비",
+              "depth": 1
+            },
+            {
+              "id": "711",
+              "name": "반도체 전공정 장비",
+              "depth": 2
+            }
+          ]
+        ],
+        "ambiguous": false,
+        "primary": [
+          {
+            "id": "169",
+            "name": "반도체",
+            "depth": 0
+          },
+          {
+            "id": "173",
+            "name": "반도체장비",
+            "depth": 1
+          },
+          {
+            "id": "711",
+            "name": "반도체 전공정 장비",
+            "depth": 2
           }
         ]
       },
