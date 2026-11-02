@@ -27,24 +27,25 @@
   "2026-10-05",
   "2026-10-12",
   "2026-10-19",
-  "2026-10-26"
+  "2026-10-26",
+  "2026-11-02"
  ],
- "generated": "2026-10-30 17:30 KST",
- "last_day": "2026-10-30",
- "universe": "2026-10",
- "n_stocks": 987,
+ "generated": "2026-11-02 17:47 KST",
+ "last_day": "2026-11-02",
+ "universe": "2026-11",
+ "n_stocks": 976,
  "min_mcap": 100000000000.0,
  "currency": "엔",
  "market": "jp",
  "label": "일본",
  "flag": "🇯🇵",
- "classification_fingerprint": "eb006a0aed512f2f22572af6ed7b5608e936e92c59e5dea5fc9cb8fd04ef7918",
+ "classification_fingerprint": "603f81f8a6467b74cd209c118c6b6868da7f2deb632fc0d6bd4e189ab858e871",
  "classification": {
   "sector": "토스 공통 대분류 매핑",
   "industry": "기존 업종 + 공시·IR 세부 검토",
   "counts": {
-   "jp_mapped": 791,
-   "provider": 192,
+   "jp_mapped": 789,
+   "provider": 183,
    "jp_reviewed": 4
   },
   "basis": "현재 분류 기준 재집계",
