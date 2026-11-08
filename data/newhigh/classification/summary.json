@@ -1,9 +1,9 @@
 {
-  "updated": "2026-11-01",
+  "updated": "2026-11-08",
   "run": {
     "selected": 40,
-    "success": 40,
-    "failed": 0,
+    "success": 39,
+    "failed": 1,
     "candidates": 0
   },
   "companies": [
@@ -337,6 +337,230 @@
       "candidates": []
     },
     {
+      "code": "000800",
+      "name": "경남기업(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814000835",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "000810",
+      "name": "삼성화재해상보험(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003992",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "000830",
+      "name": "삼성물산(주)",
+      "source_url": null,
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "000850",
+      "name": "화천기공(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002873",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "000860",
+      "name": "강남제비스코(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814004095",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "000880",
+      "name": "(주)한화",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260831001249",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "000890",
+      "name": "보해양조(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814001858",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "000910",
+      "name": "(주)유니온",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003928",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "000950",
+      "name": "(주)전방",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003215",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "000970",
+      "name": "한국주철관공업(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814000843",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "000990",
+      "name": "주식회사 DB하이텍",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003091",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001000",
+      "name": "신라섬유(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002983",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001020",
+      "name": "페이퍼코리아(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003476",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001040",
+      "name": "CJ(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002852",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001060",
+      "name": "JW중외제약(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814004216",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001070",
+      "name": "대한방직(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002848",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001080",
+      "name": "엠에이치머트리얼즈(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260910000496",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001120",
+      "name": "(주)LX인터내셔널",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814001146",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001130",
+      "name": "대한제분(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002054",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001140",
+      "name": "(주)국보",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260330001343",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001150",
+      "name": "(주)서통",
+      "source_url": null,
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001190",
+      "name": "마이크로닉스(주)",
+      "source_url": null,
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001200",
+      "name": "유진투자증권(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003025",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001210",
+      "name": "금호전기(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814001009",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001230",
+      "name": "동국홀딩스(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814001615",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001250",
+      "name": "(주)지에스글로벌",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260813000856",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001260",
+      "name": "남광토건(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002027",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001280",
+      "name": "우리증권(주)",
+      "source_url": null,
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001290",
+      "name": "(주)상상인증권",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003028",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001300",
+      "name": "제일모직(주)",
+      "source_url": null,
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001310",
+      "name": "풍림산업(주)",
+      "source_url": null,
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "001940",
+      "name": "KISCO홀딩스(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003247",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
       "code": "005160",
       "name": "동국산업(주)",
       "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003589",
@@ -389,6 +613,13 @@
       "code": "033780",
       "name": "(주)케이티앤지",
       "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814004174",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "050120",
+      "name": "(주)ES큐브",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002915",
       "status": "needs_review",
       "candidates": []
     },
@@ -456,6 +687,20 @@
       "candidates": []
     },
     {
+      "code": "089590",
+      "name": "(주)제주항공",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003505",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "089860",
+      "name": "롯데렌탈(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814001915",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
       "code": "092870",
       "name": "(주)엑시콘",
       "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814001521",
@@ -473,6 +718,13 @@
       "code": "105740",
       "name": "디케이락(주)",
       "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814004085",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "121440",
+      "name": "(주)골프존홀딩스",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003853",
       "status": "needs_review",
       "candidates": []
     },
@@ -498,6 +750,13 @@
       "candidates": []
     },
     {
+      "code": "180640",
+      "name": "(주)한진칼",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002907",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
       "code": "219130",
       "name": "주식회사 타이거일렉",
       "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814002236",
@@ -519,9 +778,23 @@
       "candidates": []
     },
     {
+      "code": "294870",
+      "name": "아이파크현대산업개발(주)",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260818000088",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
       "code": "311060",
       "name": "(주)엘에이티",
       "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260318001396",
+      "status": "needs_review",
+      "candidates": []
+    },
+    {
+      "code": "348030",
+      "name": "주식회사 모비릭스",
+      "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814001487",
       "status": "needs_review",
       "candidates": []
     },

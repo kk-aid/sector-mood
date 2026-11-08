@@ -1,0 +1,20 @@
+{
+  "code": "001230",
+  "company": {
+    "corp_code": "00114792",
+    "corp_name": "동국홀딩스(주)",
+    "stock_code": "001230",
+    "corp_cls": "Y",
+    "induty_code": "649"
+  },
+  "checked_on": "2026-11-08",
+  "receipt": "20260814001615",
+  "report_name": "반기보고서 (2026.06)",
+  "filing_date": "20260814",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814001615",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

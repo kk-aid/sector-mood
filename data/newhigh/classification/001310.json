@@ -1,0 +1,20 @@
+{
+  "code": "001310",
+  "company": {
+    "corp_code": "00155498",
+    "corp_name": "풍림산업(주)",
+    "stock_code": "001310",
+    "corp_cls": "E",
+    "induty_code": "41112"
+  },
+  "checked_on": "2026-11-08",
+  "receipt": null,
+  "report_name": null,
+  "filing_date": null,
+  "source_url": null,
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

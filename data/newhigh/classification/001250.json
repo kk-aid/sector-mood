@@ -1,0 +1,20 @@
+{
+  "code": "001250",
+  "company": {
+    "corp_code": "00138190",
+    "corp_name": "(주)지에스글로벌",
+    "stock_code": "001250",
+    "corp_cls": "Y",
+    "induty_code": "468"
+  },
+  "checked_on": "2026-11-08",
+  "receipt": "20260813000856",
+  "report_name": "반기보고서 (2026.06)",
+  "filing_date": "20260813",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260813000856",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

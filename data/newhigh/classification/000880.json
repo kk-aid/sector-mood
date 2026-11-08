@@ -1,0 +1,20 @@
+{
+  "code": "000880",
+  "company": {
+    "corp_code": "00160588",
+    "corp_name": "(주)한화",
+    "stock_code": "000880",
+    "corp_cls": "Y",
+    "induty_code": "20494"
+  },
+  "checked_on": "2026-11-08",
+  "receipt": "20260831001249",
+  "report_name": "[기재정정]반기보고서 (2026.06)",
+  "filing_date": "20260831",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260831001249",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

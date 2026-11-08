@@ -1,0 +1,20 @@
+{
+  "code": "121440",
+  "company": {
+    "corp_code": "00674498",
+    "corp_name": "(주)골프존홀딩스",
+    "stock_code": "121440",
+    "corp_cls": "K",
+    "induty_code": "461"
+  },
+  "checked_on": "2026-11-08",
+  "receipt": "20260814003853",
+  "report_name": "반기보고서 (2026.06)",
+  "filing_date": "20260814",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260814003853",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}
