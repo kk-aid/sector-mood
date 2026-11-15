@@ -1,0 +1,20 @@
+{
+  "code": "001370",
+  "company": {
+    "corp_code": "00152914",
+    "corp_name": "FnC코오롱(주)",
+    "stock_code": "001370",
+    "corp_cls": "E",
+    "induty_code": "1419"
+  },
+  "checked_on": "2026-11-15",
+  "receipt": null,
+  "report_name": null,
+  "filing_date": null,
+  "source_url": null,
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

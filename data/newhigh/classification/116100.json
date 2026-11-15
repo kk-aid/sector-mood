@@ -1,0 +1,20 @@
+{
+  "code": "116100",
+  "company": {
+    "corp_code": "00442631",
+    "corp_name": "태양기계(주)",
+    "stock_code": "116100",
+    "corp_cls": "N",
+    "induty_code": "30320"
+  },
+  "checked_on": "2026-11-15",
+  "receipt": "20260320001219",
+  "report_name": "사업보고서 (2025.12)",
+  "filing_date": "20260320",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260320001219",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

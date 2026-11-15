@@ -1,0 +1,20 @@
+{
+  "code": "473000",
+  "company": {
+    "corp_code": "01798722",
+    "corp_name": "에스케이증권제12호기업인수목적 주식회사",
+    "stock_code": "473000",
+    "corp_cls": "K",
+    "induty_code": "66199"
+  },
+  "checked_on": "2026-11-15",
+  "receipt": "20261110000103",
+  "report_name": "분기보고서 (2026.09)",
+  "filing_date": "20261110",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20261110000103",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}
