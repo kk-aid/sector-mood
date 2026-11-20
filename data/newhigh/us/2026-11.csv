@@ -711,3 +711,4 @@ date,kind,rank,code,name,label,change,close,mcap,classification_version,labels
 2026-11-18,52W,1252,ARX,ARX,인터넷,0.2,19.9,4168362069.224572,business-v1,"[""IT › 인터넷""]"
 2026-11-18,52W,1283,OGN,OGN,제약,0.14,13.92,3655692321.496403,business-v1,"[""의료 › 제약""]"
 2026-11-18,52W,1344,HZO,HZO,여가생활,0.04,52.85,1186547498.5973878,business-v1,"[""여가생활""]"
+2026-11-19,52W,23,CTKB,CTKB,의료기기,6.76,6.32,826554676.0945947,business-v1,"[""의료 › 의료기기""]"
