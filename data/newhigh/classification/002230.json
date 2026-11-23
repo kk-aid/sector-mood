@@ -1,0 +1,20 @@
+{
+  "code": "002230",
+  "company": {
+    "corp_code": "00155638",
+    "corp_name": "피에스텍(주)",
+    "stock_code": "002230",
+    "corp_cls": "K",
+    "induty_code": "27214"
+  },
+  "checked_on": "2026-11-23",
+  "receipt": "20261113001050",
+  "report_name": "분기보고서 (2026.09)",
+  "filing_date": "20261113",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20261113001050",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

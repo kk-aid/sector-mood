@@ -1,0 +1,23 @@
+{
+  "code": "001770",
+  "company": {
+    "corp_code": "00137809",
+    "corp_name": "(주)신화다이나믹스",
+    "stock_code": "001770",
+    "corp_cls": "Y",
+    "induty_code": "24199"
+  },
+  "checked_on": "2026-11-23",
+  "receipt": "20261116000508",
+  "report_name": "분기보고서 (2026.09)",
+  "filing_date": "20261116",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20261116000508",
+  "extract_status": "ok",
+  "candidates": [],
+  "revenue_evidence": [
+    "있습니다. 2. 주요 제품 및 서비스 가. 주요제품등의 현황 (단위 : 백만원) 사업부문 매출유형 품목 구체적용도 주요상표등 매출액(비율) 석도강판의제조 제품 주석도금강판 각종 CAN의원자재 - 82,848(99.23) 기타 임가공 등 - - - 644(0.77) 합계 - - - - 83,492(100) 나. 주요 제품등의 가격변동추이 (단위 : 천원) 품목 제71기 3분기 제70기 제69기 석도",
+    "변동추이 (단위 : 천원) 품목 제71기 3분기 제70기 제69기 석도강판 1,460 1,486 1,474 ※산출기준 : 제품매출액을 판매량으로 나눈 단순평균가격 기준 3. 원재료 및 생산설비 가. 주요 원재료 등의 현황 (단위 : 백만원) 사업부문 매입유형 품목 구체적용도 매입액 주요매입처 석도강판의제조 원재료 B.P COIL 외 석도강판의원부자재 60,211 포스코 외 나. 주요 원재료등의"
+  ],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

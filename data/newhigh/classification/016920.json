@@ -1,0 +1,20 @@
+{
+  "code": "016920",
+  "company": {
+    "corp_code": "00152260",
+    "corp_name": "(주)카스",
+    "stock_code": "016920",
+    "corp_cls": "K",
+    "induty_code": "465"
+  },
+  "checked_on": "2026-11-23",
+  "receipt": "20261113000679",
+  "report_name": "분기보고서 (2026.09)",
+  "filing_date": "20261113",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20261113000679",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

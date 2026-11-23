@@ -1,0 +1,20 @@
+{
+  "code": "069510",
+  "company": {
+    "corp_code": "00306719",
+    "corp_name": "에스텍(주)",
+    "stock_code": "069510",
+    "corp_cls": "K",
+    "induty_code": "26529"
+  },
+  "checked_on": "2026-11-23",
+  "receipt": "20261116000745",
+  "report_name": "분기보고서 (2026.09)",
+  "filing_date": "20261116",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20261116000745",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

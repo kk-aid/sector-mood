@@ -1,0 +1,20 @@
+{
+  "code": "002140",
+  "company": {
+    "corp_code": "00102751",
+    "corp_name": "고려산업(주)",
+    "stock_code": "002140",
+    "corp_cls": "Y",
+    "induty_code": "10520"
+  },
+  "checked_on": "2026-11-23",
+  "receipt": "20261116000164",
+  "report_name": "분기보고서 (2026.09)",
+  "filing_date": "20261116",
+  "source_url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20261116000164",
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}

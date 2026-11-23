@@ -1,0 +1,20 @@
+{
+  "code": "471800",
+  "company": {
+    "corp_code": "01797635",
+    "corp_name": "(주)에이엘로봇",
+    "stock_code": "471800",
+    "corp_cls": "K",
+    "induty_code": "292"
+  },
+  "checked_on": "2026-11-23",
+  "receipt": null,
+  "report_name": null,
+  "filing_date": null,
+  "source_url": null,
+  "extract_status": "business_section_unavailable",
+  "candidates": [],
+  "revenue_evidence": [],
+  "status": "needs_review",
+  "note": "Keyword candidates only; not revenue-weighted. Customer/competitor/new-business mentions require human review."
+}
