@@ -90,8 +90,8 @@ def _yf_download(symbols: list[str], period: str = "2y") -> dict[str, pd.DataFra
             df.columns = pd.MultiIndex.from_product([df.columns, part])
         for s in part:
             try:
-                sub = pd.DataFrame({"close": df["Close"][s], "high": df["High"][s],
-                                    "volume": df["Volume"][s]}).dropna(subset=["close"])
+                sub = pd.DataFrame({"open": df["Open"][s], "close": df["Close"][s], "high": df["High"][s],
+                                    "low": df["Low"][s], "volume": df["Volume"][s]}).dropna(subset=["close"])
             except KeyError:
                 continue
             if len(sub) >= 20:
@@ -101,7 +101,7 @@ def _yf_download(symbols: list[str], period: str = "2y") -> dict[str, pd.DataFra
 
 
 def fetch_history(mkt: str, codes: list[str]) -> dict[str, pd.DataFrame]:
-    """종목코드 → 일봉 DataFrame(close, high, volume)."""
+    """종목코드 → 일봉 DataFrame(open, close, high, low, volume)."""
     codes = list(dict.fromkeys(str(c) for c in codes))
     first = {yf_candidates(mkt, c)[0]: c for c in codes}
     got = _yf_download(list(first))
@@ -412,7 +412,30 @@ def series_for_site(df: pd.DataFrame) -> dict:
     gaps = [0] + [int(g) for g in (days[1:] - days[:-1]).days]   # 점 사이 달력일 간격 → 화면에서 날짜 복원
     return {"c": [int(round(v / last * 1000)) for v in pts.values], "step": 2, "last": last,
             "p52": None if pd.isna(prior) else int(round(prior / last * 1000)),
-            "from": pts.index[0].strftime("%Y-%m-%d"), "to": pts.index[-1].strftime("%Y-%m-%d"), "g": gaps}
+            "from": pts.index[0].strftime("%Y-%m-%d"), "to": pts.index[-1].strftime("%Y-%m-%d"), "g": gaps,
+            "k": candles_for_site(df, last)}
+
+
+CANDLE_DAYS = 260                                       # 캔들은 최근 약 1년 일봉만(파일 크기)
+
+
+def candles_for_site(df: pd.DataFrame, last: float) -> dict | None:
+    """사이트 캔들용 일봉 OHLC·거래량(yfinance, 분할 반영): 마지막 종가 대비 ×1000 정수, 날짜 = from + 달력일 간격(g) 누적.
+    시가·저가 결측(0 포함)은 종가로 채우고, 고가 ≥ max(시가, 종가) · 저가 ≤ min(시가, 종가) 가 되도록 맞춤. 거래량은 기간 최대 = 100."""
+    if not {"open", "low"} <= set(df.columns):
+        return None
+    d = df.iloc[-CANDLE_DAYS:]
+    c = d["close"].astype(float)
+    o = d["open"].astype(float).where(lambda x: x > 0).fillna(c)
+    h = pd.concat([d["high"].astype(float).fillna(c), o, c], axis=1).max(axis=1)
+    lo = pd.concat([d["low"].astype(float).where(lambda x: x > 0).fillna(c), o, c], axis=1).min(axis=1)
+    days = pd.DatetimeIndex(d.index).normalize()
+    q = lambda s: [int(round(v / last * 1000)) for v in s.values]
+    vol = d["volume"].fillna(0).astype(float) if "volume" in d else None
+    vmax = float(vol.max()) if vol is not None and len(vol) else 0
+    return {"o": q(o), "h": q(h), "l": q(lo), "c": q(c), "from": days[0].strftime("%Y-%m-%d"),
+            "g": [0] + [int(x) for x in (days[1:] - days[:-1]).days],
+            "v": [int(round(v / vmax * 100)) for v in vol.values] if vmax > 0 else None}
 
 
 # ── 메인 ────────────────────────────────────────────────
@@ -455,7 +478,7 @@ def run(mkt: str, day: date, ath: list[dict], w52: list[dict], label_of, display
         for c, df in prices.items():                         # 합성 가격 수준을 실제 종가 수준에 맞춤
             tgt = rowmap[c].get("close") if c in rowmap else last_rec.get(c, 0) * 1.03
             if tgt:
-                df[["close", "high"]] *= tgt / df["close"].iloc[-1]
+                df[["open", "close", "high", "low"]] *= tgt / df["close"].iloc[-1]
     else:
         try:
             prices = fetch_history(mkt, codes)
@@ -649,7 +672,11 @@ def _synthetic_prices(codes: list[str], day: date) -> dict[str, pd.DataFrame]:
         close = 10000 * np.cumprod(1 + r)
         close[-1] = max(close[-1], close[:-1].max() * 1.01)
         high = close * (1 + np.abs(rng.normal(0, 0.008, len(idx))))
+        opn = np.r_[close[0], close[:-1]] * (1 + rng.normal(0, 0.006, len(idx)))
+        opn[-1] = close[-1] / 1.03                     # 마지막 날 양봉
+        high = np.maximum(high, np.maximum(opn, close))
+        low = np.minimum(opn, close) * (1 - np.abs(rng.normal(0, 0.008, len(idx))))
         vol = rng.lognormal(12, 0.5, len(idx))
         vol[-1] *= 3
-        out[c] = pd.DataFrame({"close": close, "high": high, "volume": vol}, index=idx)
+        out[c] = pd.DataFrame({"open": opn, "close": close, "high": high, "low": low, "volume": vol}, index=idx)
     return out
