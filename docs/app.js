@@ -1073,10 +1073,58 @@ function nhBig(ch, show, W = 960, H = 360){
   const chg = P(c[n-1]) / P(c[from]) * 100 - 100;
   return {svg:s, at, chg, start: dates ? dates[from] : null};
 }
+function nhCandle(ch, show, W = 960, H = 360){        // 일봉 캔들 + 거래량 (ch.k, 최근 약 1년)
+  const k = ch.k, n = k.c.length, last = ch.last || 1000, P = v => v/1000*last;
+  const L = 8, R = 64, T = 12, B = 26, VH = Math.round((H-T-B)*.18), PH = H-T-B-VH-6;
+  const t0 = Date.parse(k.from + "T00:00:00Z"); let acc = 0;
+  const dates = k.g.map(g => { acc += g; return new Date(t0 + acc*864e5).toISOString().slice(0,10); });
+  const cnt = Math.min(n, Math.max(10, show)), from = n - cnt;
+  const pos = Object.fromEntries(dates.map((d,i) => [d,i]));
+  const st = ch.step || 2, cd = nhDates(ch) || [];       // 이평은 2년 종가(2일 간격)로 계산해 같은 날짜에 찍음
+  const ma = m0 => { const m = Math.max(1, Math.round(m0/st)); let sum = 0; return ch.c.map((v,i) => { sum += v; if(i >= m) sum -= ch.c[i-m]; return i+1 < m ? null : sum/m; }); };
+  const mas = [[200,"var(--dn)"],[50,"var(--warn)"],[20,"var(--up)"]].map(([d,col]) => ({d, col, v: ma(d)}));
+  const vis = [];
+  for(let i = from; i < n; i++) vis.push(k.h[i], k.l[i]);
+  mas.forEach(m => m.v.forEach((v,i) => { const j = pos[cd[i]]; if(v!=null && j!=null && j >= from) vis.push(v); }));
+  if(ch.p52) vis.push(ch.p52);
+  let lo = Math.min(...vis), hi = Math.max(...vis); const pad = (hi-lo)*.05 || 1; lo -= pad; hi += pad;
+  const bw = (W-L-R)/cnt, X = i => L + (i-from+.5)*bw, Y = v => T + (1-(v-lo)/(hi-lo))*PH;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" class="nhbig">`;
+  for(let q = 0; q <= 4; q++){ const v = lo + (hi-lo)*q/4, y = Y(v).toFixed(1);
+    s += `<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="var(--line2)"/><text x="${W-R+6}" y="${(+y+4).toFixed(1)}" class="ax">${nhPrice(P(v))}</text>`; }
+  let prev = dates[from].slice(0,7), every = cnt > 200 ? 2 : 1, mc = 0;
+  for(let i = from+1; i < n; i++){ const m = dates[i].slice(0,7); if(m !== prev){ prev = m; if(mc++ % every) continue;
+    const x = (L + (i-from)*bw).toFixed(1); s += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H-B}" stroke="var(--line2)"/><text x="${x}" y="${H-8}" class="ax" text-anchor="middle">${m.slice(2).replace("-","/")}</text>`; } }
+  if(ch.p52){ const y = Y(ch.p52).toFixed(1); s += `<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="var(--ink3)" stroke-dasharray="4 4"/><text x="${L+4}" y="${(+y-5).toFixed(1)}" class="ax lbl">직전 52주 고점 ${nhPrice(P(ch.p52))}</text>`; }
+  if(k.v){ const vb = T+PH+6+VH; for(let i = from; i < n; i++){ const hgt = k.v[i]/100*VH;
+    s += `<rect x="${(X(i)-bw*.35).toFixed(1)}" y="${(vb-hgt).toFixed(1)}" width="${Math.max(.6,bw*.7).toFixed(1)}" height="${hgt.toFixed(1)}" fill="${k.c[i]>=k.o[i]?"var(--up)":"var(--dn)"}" opacity=".35"/>`; } }
+  for(let i = from; i < n; i++){
+    const up = k.c[i] >= k.o[i], col = up ? "var(--up)" : "var(--dn)", x = X(i).toFixed(1);
+    const yt = Y(Math.max(k.o[i],k.c[i])), yb = Y(Math.min(k.o[i],k.c[i]));
+    s += `<line x1="${x}" x2="${x}" y1="${Y(k.h[i]).toFixed(1)}" y2="${Y(k.l[i]).toFixed(1)}" stroke="${col}" stroke-width="1"/>` +
+      `<rect x="${(X(i)-bw*.35).toFixed(1)}" y="${yt.toFixed(1)}" width="${Math.max(.8,bw*.7).toFixed(1)}" height="${Math.max(.8,yb-yt).toFixed(1)}" fill="${up?"var(--panel)":col}" stroke="${col}" stroke-width="1"/>`;
+  }
+  for(const m of mas){ let d = ""; m.v.forEach((v,i) => { const j = pos[cd[i]]; if(v==null || j==null || j < from) return; d += `${d?"L":"M"}${X(j).toFixed(1)},${Y(v).toFixed(1)}`; });
+    if(d) s += `<path d="${d}" fill="none" stroke="${m.col}" stroke-width="1.1" opacity=".9"/>`; }
+  s += `<g id="nhx" style="display:none"><line id="nhxl" y1="${T}" y2="${H-B}" stroke="var(--ink3)"/><circle id="nhxc" r="0"/></g>`;
+  s += `<rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="transparent" id="nhhit"/></svg>`;
+  const maAt = (d0) => mas.slice().reverse().map(m => { const i = cd.indexOf(d0); return i < 0 || m.v[i]==null ? null : P(m.v[i]); });
+  const at = px => {
+    const i = Math.max(from, Math.min(n-1, from + Math.floor((px*W - L)/bw)));
+    const chg = i > 0 ? (k.c[i]/k.c[i-1]-1)*100 : null;
+    return {i, x:X(i), y:Y(k.c[i]), W, H, lab:dates[i], price:P(k.c[i]),
+      ohlc:`시 ${nhPrice(P(k.o[i]))} · 고 ${nhPrice(P(k.h[i]))}<br>저 ${nhPrice(P(k.l[i]))} · 종 ${nhPrice(P(k.c[i]))}${chg==null?"":` <span class="${chg>=0?"pos":"neg"}">${fmt(chg)}%</span>`}`,
+      ma: maAt(dates[i])};
+  };
+  return {svg:s, at, chg: (k.c[n-1]/k.c[from]-1)*100, start: dates[from], candle:true};
+}
 function nhDrawChart(){
   const st = NHLIST[nhIdx], box = $("#nhchart");
   box.innerHTML = "";
-  const g = nhBig(st.chart, nhRange, Math.max(300, box.clientWidth - 14), window.innerWidth < 640 ? 260 : 360);
+  const cw = Math.max(300, box.clientWidth - 14), chh = window.innerWidth < 640 ? 280 : 400;
+  const ck = st.chart && st.chart.k && st.chart.k.c && st.chart.k.c.length >= 10;
+  const g = ck && nhRange <= st.chart.k.c.length ? nhCandle(st.chart, nhRange, cw, chh) : nhBig(st.chart, nhRange, cw, chh);
+  $("#nhmode").textContent = g.candle ? "일봉 캔들 · 거래량" : ck ? "2년은 종가선 (캔들은 최근 1년)" : "종가선 (캔들 데이터 없는 날짜)";
   box.innerHTML = g.svg + `<div class="nhtip" id="nhtip"></div>`;
   $("#nhrchg").innerHTML = g.chg==null ? "" : `기간 수익률 <b class="mono ${g.chg>=0?"pos":"neg"}">${fmt(g.chg)}%</b>${g.start?` <span style="color:var(--ink3)">(${esc(g.start)}~)</span>`:""}`;
   document.querySelectorAll("#nhrange button").forEach(b => b.classList.toggle("on", +b.dataset.r===nhRange));
@@ -1088,7 +1136,7 @@ function nhDrawChart(){
     $("#nhx").style.display = ""; $("#nhxl").setAttribute("x1", p.x); $("#nhxl").setAttribute("x2", p.x);
     $("#nhxc").setAttribute("cx", p.x); $("#nhxc").setAttribute("cy", p.y);
     tip.style.display = "block";
-    tip.innerHTML = `<b>${esc(p.lab)}</b><br>종가 <span class="mono">${nhPrice(p.price)}</span>` +
+    tip.innerHTML = `<b>${esc(p.lab)}</b><br>` + (p.ohlc ? `<span class="mono">${p.ohlc}</span>` : `종가 <span class="mono">${nhPrice(p.price)}</span>`) +
       p.ma.map((v,k) => v==null ? "" : `<br><span style="color:${["var(--up)","var(--warn)","var(--dn)"][k]}">${[20,50,200][k]}일</span> <span class="mono">${nhPrice(v)}</span>`).join("");
     const left = p.x / p.W * r.width;
     tip.style.left = (left > r.width*.6 ? left - tip.offsetWidth - 12 : left + 12) + "px";

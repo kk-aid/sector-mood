@@ -369,13 +369,14 @@ h2.sh{font-size:17px;margin:30px 0 4px;display:flex;align-items:center;gap:8px}
     <div class="nhbar">
       <div class="seg" id="nhrange"><button data-r="63">3M</button><button data-r="126">6M</button><button data-r="252">1Y</button><button data-r="452">2Y</button></div>
       <span id="nhrchg" style="font-size:13px"></span>
+      <span id="nhmode" class="tag"></span>
       <span class="nhleg"><i style="background:var(--ink)"></i>종가 <i style="background:var(--up)"></i>20일 <i style="background:var(--warn)"></i>50일 <i style="background:var(--dn)"></i>200일 <i class="dash"></i>직전 52주 고점</span>
     </div>
     <div class="nhchart" id="nhchart"></div>
     <div class="nhl" id="nhlinks"></div>
     <div id="nhmat"></div>
     <div class="nhnav"><button class="btn" id="nhprev">← 이전 종목</button><button class="btn" id="nhnext">다음 종목 →</button></div>
-    <p class="nhnote">종가 기준 2일 간격 압축 시계열(분할·배당 조정)이라 장중 고가·저가는 보이지 않음. 캔들·거래량은 '차트' 링크(TradingView)에서 봄. ←/→ 키로 종목 이동, Esc 로 닫기.</p>
+    <p class="nhnote">3M~1Y 는 일봉 캔들(빨강 속빈 = 양봉, 파랑 = 음봉)과 거래량(기간 최대 대비), 2Y 는 2일 간격 종가선. 가격은 yfinance 일봉(분할 반영). 이평선은 종가 기준. ←/→ 키로 종목 이동, Esc 로 닫기.</p>
   </div>
 </div>
 

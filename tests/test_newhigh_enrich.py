@@ -107,6 +107,11 @@ def main():
         assert len(ch["g"]) == len(ch["c"]) and ch["g"][0] == 0 and all(g > 0 for g in ch["g"][1:])
         from datetime import date as _d, timedelta as _td
         assert _d.fromisoformat(ch["from"]) + _td(days=sum(ch["g"])) == _d.fromisoformat(ch["to"])
+        k = ch["k"]
+        assert len(k["o"]) == len(k["h"]) == len(k["l"]) == len(k["c"]) == len(k["g"]) == len(k["v"]) == E.CANDLE_DAYS
+        assert k["c"][-1] == 1000 and k["o"][-1] < k["c"][-1]          # 마지막 날 양봉
+        assert all(l <= min(o, c) and h >= max(o, c) for o, h, l, c in zip(k["o"], k["h"], k["l"], k["c"]))
+        assert _d.fromisoformat(k["from"]) + _td(days=sum(k["g"])) == _d.fromisoformat(ch["to"])
         assert len(doc["follow"]) == 10 and all("ret" in r for r in doc["follow"])
         # 누적: 어제 기록된 종목은 오늘 다시 나와도 한 번만 셈
         any_label = doc["follow"][0]["label"]
