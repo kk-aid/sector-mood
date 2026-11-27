@@ -103,6 +103,10 @@ def main():
         assert idx["days"] == ["2026-10-16"] and sum(idx["counts"]["2026-10-16"].values()) == len(ath) + len(w52)
         st = doc["stocks"][0]
         assert st["chart"]["c"][-1] == 1000 and st["chart"]["step"] == 2 and st["news"]
+        ch = st["chart"]
+        assert len(ch["g"]) == len(ch["c"]) and ch["g"][0] == 0 and all(g > 0 for g in ch["g"][1:])
+        from datetime import date as _d, timedelta as _td
+        assert _d.fromisoformat(ch["from"]) + _td(days=sum(ch["g"])) == _d.fromisoformat(ch["to"])
         assert len(doc["follow"]) == 10 and all("ret" in r for r in doc["follow"])
         # 누적: 어제 기록된 종목은 오늘 다시 나와도 한 번만 셈
         any_label = doc["follow"][0]["label"]

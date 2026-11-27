@@ -93,7 +93,20 @@ class StrengthTests(unittest.TestCase):
         self.assertEqual(results['ETF']['asset'], 'ETF')
         self.assertIsNone(results['ETF']['rs'])
         self.assertIn('ETF 52주 신고가', text)
-        self.assertIn('주식과 별도 순위', text)
+        self.assertNotIn('RS', text)
+        self.assertNotIn('Flip', text)
+
+    def test_stock_message_drops_rs_and_flip_sections(self):
+        rows = [{'name': c, 'change': 3.0, 'close': 11, 'open': 10, 'high': 11,
+                 'High.All': 11, 'price_52_week_high': 11} for c in 'AB']
+        fs = {'A': frame(.004), 'B': frame(.002), '@us': frame(.001)}
+        fs['A'].loc[fs['A'].index[-1], 'volume'] *= 3
+        with patch.object(strength, 'download', return_value=(fs, {})):
+            results, text = strength.run(rows, 'us', lambda r, _: r['name'], write=False)
+        self.assertEqual(results['A']['rs'], 99)  # 계산·저장은 유지
+        self.assertIn('거래대금 급증', text)
+        for gone in ('RS', 'R/S', 'Flip', '상대강도', 'MTT'):
+            self.assertNotIn(gone, text)
 
 
 if __name__ == '__main__':

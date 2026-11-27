@@ -173,48 +173,30 @@ def calculate(rows, mkt, frames, resolved, etf=False):
 
 
 def brief(x):
-    score = "–" if x["rs"] is None else str(x["rs"])
-    parts = [f"RS {score}"]
-    parts.append("1/3/6M " + "/".join("–" if x[k] is None else str(x[k]) for k in ("rs1", "rs3", "rs6")))
+    """텔레그램 한 줄 요약. RS 순위·R/S Flip 은 알림에서 뺌(사이트용 strength.json 에는 그대로 남김)."""
+    parts = []
     if x["excess_1m"] is not None:
         parts.append(f"1M 시장비 +{x['excess_1m']:.1f}%" if x["excess_1m"] >= 0 else f"1M 시장비 {x['excess_1m']:.1f}%")
     if x["turnover_multiple"] is not None:
         parts.append(f"대금 {x['turnover_multiple']:.1f}배")
-    if x["mtt"] is not None:
-        parts.append(f"MTT {x['mtt']}/8")
-    if x["line_nh"]:
-        parts.append("RS선 63일 신고가")
     cls = x.get('classification') or {}
     if cls.get('source') == 'toss':
         parts.append('분류 ' + ' › '.join(z for z in (cls.get('sector'), cls.get('industry'), cls.get('subindustry')) if z))
     elif cls.get('toss_ambiguous'):
         parts.append('토스 복수 업종')
-    parts += [x["flow"], x["benchmark"]]
+    parts.append(x["benchmark"])
     return " · ".join(parts)
 
 
 def message(rows, results, display_name, mkt, etf=False):
+    """텔레그램 추가 스크리닝: 거래대금 급증(+ETF 52주 신고가)만 보냄. RS 상위·신고가 RS 보강·R/S Flip 은 제외."""
     valid = [(r, results[str(r["name"])]) for r in rows if str(r["name"]) in results]
     lines = ["", "<b>📊 " + ("주요 ETF" if etf else "주식") + " 추가 스크리닝</b>",
-             "자체 RS · " + ("등록 ETF" if etf else "필터 통과·수집 성공 종목") + " 내 시장별 순위 (IBD 공식 아님)",
-             f"대상 {len(rows)} · 가격/지수 정렬 성공 {len(results)} · 신규상장은 가능한 단기 점수만 표시"]
-    if etf:
-        lines.append("ETF는 주식과 별도 순위 · 상장국 지수 대비 (해외자산/채권/금도 동일 기준)")
-    for group in sorted({v["group"] for v in results.values()}):
-        x = next(v for v in results.values() if v["group"] == group)
-        lines.append(f"{x['benchmark']}: 종합 {x['rs_n']}종목 · 기준 {x['day']}")
+             f"대상 {len(rows)} · 가격/지수 정렬 성공 {len(results)}"]
     sections = [
-        ("💪 상대강도 상위", sorted([(r, x) for r, x in valid if x["rs"] is not None and x["rs"] >= 90 and (x["excess_1m"] or 0) > 0], key=lambda z: (-z[1]["rs"], -(z[1]["excess_1m"] or 0)))),
-        ("💰 거래대금 급증", sorted([(r, x) for r, x in valid if x["turnover_multiple"] is not None and (x["turnover_multiple"] >= 2 or x["turnover_peak"])], key=lambda z: -z[1]["turnover_multiple"])),
-        ("🔄 R/S Flip · 저항→지지 재시험", [(r, x) for r, x in valid if x["flip"]])]
+        ("💰 거래대금 급증", sorted([(r, x) for r, x in valid if x["turnover_multiple"] is not None and (x["turnover_multiple"] >= 2 or x["turnover_peak"])], key=lambda z: -z[1]["turnover_multiple"]))]
     if etf:
         sections.insert(0, ("📈 ETF 52주 신고가", [(r, x) for r, x in valid if x["high52"] and (r.get("change") or 0) > 0 and (r.get("close") or 0) > (r.get("open") or float("inf"))]))
-    if not etf:
-        from .newhigh import _hit
-        hits = [(r, x) for r, x in valid if (r.get("change") or 0) > 0
-                and (r.get("close") or 0) > (r.get("open") or float("inf"))
-                and (_hit(r.get("high"), r.get("High.All")) or _hit(r.get("high"), r.get("price_52_week_high")))]
-        sections.insert(0, ("🏆 신고가 종목 RS 보강", sorted(hits, key=lambda z: -(z[1]["rs"] or 0))))
     for title, selected in sections:
         lines += ["", f"<b>{title} {len(selected)}종목</b>"]
         if not selected:
@@ -222,8 +204,6 @@ def message(rows, results, display_name, mkt, etf=False):
         for r, x in selected[:config.STRENGTH_TOP]:
             lines.append(f"{html.escape(display_name(r, mkt))} {(r.get('change') or 0):+.1f}%")
             lines.append("  └ " + brief(x))
-            if x["flip"]:
-                lines.append(f"  └ 이전 저항(수정가격) {x['flip']['level']:,.2f} · 대비 {x['flip']['gap']:+.1f}%")
         if len(selected) > config.STRENGTH_TOP:
             lines.append(f"상위 {config.STRENGTH_TOP}종목 표시")
     lines += ["", "대금=종가×거래량 추정 · 직전 20일 평균비 2배↑ 또는 최고치 경신"]

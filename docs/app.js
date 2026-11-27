@@ -29,6 +29,7 @@ let cache = {}, sortCol = "week", drill = null, expanded = new Set(), rrgSel = n
 let crossSort = "avg", trendF = {f:"all", sector:null, d:null, w:null};
 let WKSEL = null, wkTab = "kr";
 let NHDAY = null, nhF = {kind:"all", label:"", cluster:false}, followSort = -1;
+let NHLIST = [], NHCUR = "", nhIdx = -1, nhRange = 252;
 
 /* ── 유틸 ─────────────────────────────── */
 function load(){ try{ return {...DEF, ...JSON.parse(localStorage.getItem("sm-settings")||"{}")}; }catch(e){ return {...DEF}; } }
@@ -731,6 +732,8 @@ $("#view").addEventListener("click", async e => {
     const nl = t.closest("[data-nhl]");
     if(nl && !t.closest("a")){ nhF.label = nhF.label===nl.dataset.nhl ? "" : nl.dataset.nhl; await render(); document.querySelector(".nhg")?.scrollIntoView({behavior:"smooth"}); return; }
     if(t.closest("[data-fs]")){ followSort = -followSort; render(); return; }
+    const ns = t.closest("[data-nhs]");
+    if(ns && !t.closest("a")){ openNhChart(+ns.dataset.nhs); return; }
     return;
   }
   const tog = t.closest("[data-tog]");
@@ -1017,6 +1020,114 @@ function nhMat(list, cls){
   return list.map(x => `<li class="${cls}"><a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.t)}</a> <span>${esc(x.s||"")} ${esc(md(x.d||"----------"))}</span></li>`).join("");
 }
 
+/* 신고가 큰 차트 (종목 누르면 열림) */
+const nhPrice = v => v==null || !isFinite(v) ? "–" : v>=1000 ? Math.round(v).toLocaleString() : v>=100 ? v.toFixed(1) : v.toFixed(2);
+function nhSpark(ch, w=110, h=26){
+  if(!ch || !ch.c || ch.c.length < 10) return "";
+  const st = ch.step || 2, c = ch.c.slice(-Math.round(252/st));
+  const lo = Math.min(...c), hi = Math.max(...c), r = hi-lo || 1;
+  const d = c.map((v,i) => `${i?"L":"M"}${(i/(c.length-1)*(w-2)+1).toFixed(1)},${(h-2-(v-lo)/r*(h-4)).toFixed(1)}`).join("");
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block"><path d="${d}" fill="none" stroke="var(--up)" stroke-width="1.2"/></svg>`;
+}
+function nhDates(ch){                                   // g(달력일 간격)가 있으면 실제 날짜 복원
+  if(!ch.g || ch.g.length !== ch.c.length || !ch.from) return null;
+  const t0 = Date.parse(ch.from + "T00:00:00Z"); let acc = 0;
+  return ch.g.map(g => { acc += g; return new Date(t0 + acc*864e5).toISOString().slice(0,10); });
+}
+function nhBig(ch, show, W = 960, H = 360){
+  const L = 8, R = 64, T = 12, B = 26;
+  if(!ch || !ch.c || ch.c.length < 10) return {svg:`<div class="nhc-empty" style="height:240px">차트 데이터 없음</div>`};
+  const c = ch.c, n = c.length, st = ch.step || 2, last = ch.last || 1000;
+  const ma = k => { const m = Math.max(1, Math.round(k/st)); let sum = 0; return c.map((v,i) => { sum += v; if(i >= m) sum -= c[i-m]; return i+1 < m ? null : sum/m; }); };
+  const m20 = ma(20), m50 = ma(50), m200 = ma(200);
+  const cnt = Math.min(n, Math.max(10, Math.round(show/st))), from = n - cnt;
+  const vis = [c, m20, m50, m200].flatMap(a => a.slice(from).filter(x => x!=null));
+  if(ch.p52) vis.push(ch.p52);
+  let lo = Math.min(...vis), hi = Math.max(...vis); const pad = (hi-lo)*.06 || 1; lo -= pad; hi += pad;
+  const X = i => L + (i-from)/(cnt-1)*(W-L-R), Y = v => T + (1-(v-lo)/(hi-lo))*(H-T-B);
+  const P = v => v/1000*last;
+  const dates = nhDates(ch);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" class="nhbig">`;
+  for(let k = 0; k <= 4; k++){                          // 가로 눈금 + 가격
+    const v = lo + (hi-lo)*k/4, y = Y(v).toFixed(1);
+    s += `<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="var(--line2)"/><text x="${W-R+6}" y="${(+y+4).toFixed(1)}" class="ax">${nhPrice(P(v))}</text>`;
+  }
+  if(dates){                                            // 월 경계 눈금
+    let prev = dates[from].slice(0,7), every = cnt*st > 300 ? 3 : cnt*st > 130 ? 2 : 1, k = 0;
+    for(let i = from+1; i < n; i++){ const m = dates[i].slice(0,7); if(m !== prev){ prev = m; if(k++ % every) continue;
+      const x = X(i).toFixed(1); s += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H-B}" stroke="var(--line2)"/><text x="${x}" y="${H-8}" class="ax" text-anchor="middle">${m.slice(2).replace("-","/")}</text>`; } }
+  }
+  if(ch.p52){ const y = Y(ch.p52).toFixed(1); s += `<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="var(--ink3)" stroke-dasharray="4 4"/><text x="${L+4}" y="${(+y-5).toFixed(1)}" class="ax lbl">직전 52주 고점 ${nhPrice(P(ch.p52))}</text>`; }
+  for(const [a, col, w] of [[m200,"var(--dn)",1],[m50,"var(--warn)",1],[m20,"var(--up)",1],[c,"var(--ink)",1.6]]){
+    let d = ""; for(let i = from; i < n; i++){ if(a[i]==null) continue; d += `${d?"L":"M"}${X(i).toFixed(1)},${Y(a[i]).toFixed(1)}`; }
+    if(d) s += `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w}" vector-effect="non-scaling-stroke"/>`;
+  }
+  s += `<circle cx="${X(n-1).toFixed(1)}" cy="${Y(c[n-1]).toFixed(1)}" r="3.5" fill="var(--up)"/>`;
+  s += `<g id="nhx" style="display:none"><line id="nhxl" y1="${T}" y2="${H-B}" stroke="var(--ink3)"/><circle id="nhxc" r="3.5" fill="var(--ink)"/></g>`;
+  s += `<rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="transparent" id="nhhit"/></svg>`;
+  const at = px => {                                    // 화면 x(0~1) → 점 정보
+    const i = Math.max(from, Math.min(n-1, Math.round(from + (px*W - L)/(W-L-R)*(cnt-1))));
+    const lab = dates ? dates[i] : `약 ${(n-1-i)*st}거래일 전`;
+    return {i, x:X(i), y:Y(c[i]), lab, price:P(c[i]), ma:[m20[i],m50[i],m200[i]].map(v => v==null?null:P(v)), W, H};
+  };
+  const chg = P(c[n-1]) / P(c[from]) * 100 - 100;
+  return {svg:s, at, chg, start: dates ? dates[from] : null};
+}
+function nhDrawChart(){
+  const st = NHLIST[nhIdx], box = $("#nhchart");
+  box.innerHTML = "";
+  const g = nhBig(st.chart, nhRange, Math.max(300, box.clientWidth - 14), window.innerWidth < 640 ? 260 : 360);
+  box.innerHTML = g.svg + `<div class="nhtip" id="nhtip"></div>`;
+  $("#nhrchg").innerHTML = g.chg==null ? "" : `기간 수익률 <b class="mono ${g.chg>=0?"pos":"neg"}">${fmt(g.chg)}%</b>${g.start?` <span style="color:var(--ink3)">(${esc(g.start)}~)</span>`:""}`;
+  document.querySelectorAll("#nhrange button").forEach(b => b.classList.toggle("on", +b.dataset.r===nhRange));
+  const hit = $("#nhhit"); if(!hit || !g.at) return;
+  const tip = $("#nhtip"), svg = box.querySelector("svg");
+  const move = e => {
+    const r = svg.getBoundingClientRect(), cx = (e.touches ? e.touches[0].clientX : e.clientX);
+    const p = g.at((cx - r.left) / r.width);
+    $("#nhx").style.display = ""; $("#nhxl").setAttribute("x1", p.x); $("#nhxl").setAttribute("x2", p.x);
+    $("#nhxc").setAttribute("cx", p.x); $("#nhxc").setAttribute("cy", p.y);
+    tip.style.display = "block";
+    tip.innerHTML = `<b>${esc(p.lab)}</b><br>종가 <span class="mono">${nhPrice(p.price)}</span>` +
+      p.ma.map((v,k) => v==null ? "" : `<br><span style="color:${["var(--up)","var(--warn)","var(--dn)"][k]}">${[20,50,200][k]}일</span> <span class="mono">${nhPrice(v)}</span>`).join("");
+    const left = p.x / p.W * r.width;
+    tip.style.left = (left > r.width*.6 ? left - tip.offsetWidth - 12 : left + 12) + "px";
+    tip.style.top = "8px";
+  };
+  const leave = () => { $("#nhx").style.display = "none"; tip.style.display = "none"; };
+  hit.addEventListener("mousemove", move); hit.addEventListener("touchmove", move, {passive:true});
+  hit.addEventListener("mouseleave", leave);
+}
+function openNhChart(i){
+  if(!NHLIST[i]) return;
+  nhIdx = i; const st = NHLIST[i];
+  $("#nhtitle").innerHTML = `${esc(st.name)} <small class="mono" style="color:var(--ink3);font-size:14px">${esc(st.code)}${st.exchange?" · "+esc(st.exchange):""}</small>`;
+  $("#nhstats").innerHTML = `<span class="badge${st.kind==="ATH"?" up":""}">${KIND[st.kind]} 신고가</span> <span>${esc(NHDAY)}</span>
+    <span>등락 <b class="mono pos">${fmt(st.change)}%</b></span> <span>종가 <b class="mono">${nhPrice(st.close)}</b></span>
+    <span>시총 <b>${moneyFmt(st.mcap, NHCUR)}</b></span>${st.full && st.full!==st.name?`<span>${esc(st.full)}</span>`:""}`;
+  $("#nhcls").innerHTML = nhClassification(st);
+  $("#nhlinks").innerHTML = nhLinks(st) + ` <span style="color:var(--ink3)">· ${i+1} / ${NHLIST.length}</span>`;
+  const mat = nhMat(st.filings, "f") + nhMat(st.news, "n");
+  $("#nhmat").innerHTML = mat ? `<ul class="nhmat">${mat}</ul>` : `<div class="nhmat-none">최근 공시·뉴스 없음</div>`;
+  $("#nhprev").disabled = i === 0; $("#nhnext").disabled = i === NHLIST.length-1;
+  $("#nhsheet").classList.add("open"); document.body.style.overflow = "hidden";
+  nhDrawChart();
+}
+window.addEventListener("resize", () => { if(nhIdx >= 0) nhDrawChart(); });
+function closeNhChart(){ nhIdx = -1; $("#nhsheet").classList.remove("open"); document.body.style.overflow = ""; }
+$("#nhsheet").addEventListener("click", e => {
+  if(e.target.id==="nhsheet" || e.target.id==="nhclose") return closeNhChart();
+  const r = e.target.closest("#nhrange button"); if(r){ nhRange = +r.dataset.r; nhDrawChart(); return; }
+  if(e.target.id==="nhprev") openNhChart(nhIdx-1);
+  if(e.target.id==="nhnext") openNhChart(nhIdx+1);
+});
+document.addEventListener("keydown", e => {
+  if(nhIdx < 0) return;
+  if(e.key==="Escape") closeNhChart();
+  else if(e.key==="ArrowLeft" && nhIdx > 0) openNhChart(nhIdx-1);
+  else if(e.key==="ArrowRight" && nhIdx < NHLIST.length-1) openNhChart(nhIdx+1);
+});
+
 async function renderNewhigh(){
   const NI = await tryJSON(`data/${MKT}/newhigh/index.json`);
   if(!NI || !NI.days || !NI.days.length){
@@ -1044,6 +1155,20 @@ async function renderNewhigh(){
       <button class="chipb${nhF.cluster?" on":""}" data-nh="cluster">🔥 군집만</button></div>
     <div class="grp"><label>라벨</label><select id="nhlab"><option value="">전체</option>${labelsAll.map(l => `<option${l===nhF.label?" selected":""}>${esc(l)}</option>`).join("")}</select></div>
   </div>`;
+
+  // 신고가 종목 리스트 (누르면 큰 차트)
+  NHLIST = stocks.slice().sort((a,b) => (a.kind===b.kind ? 0 : a.kind==="ATH" ? -1 : 1) || b.change-a.change);
+  NHCUR = cur;
+  if(NHLIST.length){
+    h += `<h2 class="sh" style="margin-top:6px">신고가 종목 리스트 <span class="tag">${NHLIST.length}종목 · ${D.day} · 종목을 누르면 차트</span></h2>
+      <div class="card"><div class="scroll" style="max-height:440px;overflow:auto"><table class="tbl nhlist"><thead><tr><th class="l">종목</th><th>구분</th><th>등락</th><th>종가</th><th class="l">라벨</th><th>시총</th><th class="l">1년</th></tr></thead><tbody>` +
+      NHLIST.map((st,i) => `<tr class="click" data-nhs="${i}"><td class="l"><b>${esc(st.name)}</b> <small class="mono" style="color:var(--ink3)">${esc(st.code)}</small></td>
+        <td class="ctr"><span class="badge${st.kind==="ATH"?" up":""}">${KIND[st.kind]}</span></td>
+        <td class="mono pos">${fmt(st.change)}%</td><td class="mono">${st.close==null?"–":nhPrice(st.close)}</td>
+        <td class="l" style="max-width:220px;overflow:hidden;text-overflow:ellipsis">${esc(nhLabels(st).join(" / "))}</td>
+        <td class="mono">${moneyFmt(st.mcap, cur)}</td><td class="l">${nhSpark(st.chart)}</td></tr>`).join("") +
+      `</tbody></table></div></div>`;
+  }
 
   // 군집 표
   if(cl.length){
@@ -1089,10 +1214,11 @@ async function renderNewhigh(){
     h += `<div class="nhg"><div class="nhg-h"><b>${esc(g)}</b> <span>${ss.length}종목</span>${clSet.has(g)?` <span class="badge up">군집</span>`:""}</div><div class="nhgrid">`;
     for(const st of ss){
       const mat = nhMat(st.filings, "f") + nhMat(st.news, "n");
-      h += `<div class="nhcard"><div class="nhh"><div><b>${esc(st.name)}</b> <small class="mono">${esc(st.code)}</small></div>
+      const li = NHLIST.indexOf(st);
+      h += `<div class="nhcard"><div class="nhh"><div class="click" data-nhs="${li}"><b>${esc(st.name)}</b> <small class="mono">${esc(st.code)}</small></div>
           <div class="mono"><span class="pos"><b>${fmt(st.change)}%</b></span> <span class="badge${st.kind==="ATH"?" up":""}">${KIND[st.kind]}</span></div></div>
         <div class="nhm">${nhClassification(st)} · 시총 ${moneyFmt(st.mcap, cur)}${st.rank?` · 상승률 ${st.rank}위`:""}</div>
-        ${nhChart(st.chart)}
+        <div class="click" data-nhs="${li}" title="크게 보기">${nhChart(st.chart)}</div>
         <div class="nhl">${nhLinks(st)}</div>
         ${mat ? `<ul class="nhmat">${mat}</ul>` : `<div class="nhmat-none">최근 공시·뉴스 없음</div>`}</div>`;
     }
