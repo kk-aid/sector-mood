@@ -408,9 +408,11 @@ def series_for_site(df: pd.DataFrame) -> dict:
     last = float(c.iloc[-1])
     pts = c.iloc[::-1].iloc[::2].iloc[::-1]          # 마지막 날이 반드시 포함되도록 끝에서부터 2일 간격
     prior = df["high"].shift(1).rolling(251, min_periods=120).max().iloc[-1]
+    days = pd.DatetimeIndex(pts.index).normalize()
+    gaps = [0] + [int(g) for g in (days[1:] - days[:-1]).days]   # 점 사이 달력일 간격 → 화면에서 날짜 복원
     return {"c": [int(round(v / last * 1000)) for v in pts.values], "step": 2, "last": last,
             "p52": None if pd.isna(prior) else int(round(prior / last * 1000)),
-            "from": pts.index[0].strftime("%Y-%m-%d")}
+            "from": pts.index[0].strftime("%Y-%m-%d"), "to": pts.index[-1].strftime("%Y-%m-%d"), "g": gaps}
 
 
 # ── 메인 ────────────────────────────────────────────────
